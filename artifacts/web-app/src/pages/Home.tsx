@@ -114,8 +114,9 @@ export function Home() {
       await regenerate({ data: { mealType, date: today } });
       await refetchRecipes();
       toast({ title: "Recipe swapped!", description: "NutriAI generated a new recipe for you." });
-    } catch (e: any) {
-      toast({ title: "Could not swap recipe", description: e.message || "You may have reached your daily limit.", variant: "destructive" });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "You may have reached your daily limit.";
+      toast({ title: "Could not swap recipe", description: message, variant: "destructive" });
     } finally {
       setRegeneratingMeal(null);
     }
