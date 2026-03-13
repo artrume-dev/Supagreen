@@ -92,7 +92,7 @@ export default function RecipeDetailScreen() {
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(
     new Set()
   );
-  const [isSaved, setIsSaved] = useState(false);
+  const [isSavedLocal, setIsSavedLocal] = useState(false);
 
   const todayDate = new Date().toISOString().split("T")[0];
 
@@ -104,12 +104,12 @@ export default function RecipeDetailScreen() {
     ...getGetSavedRecipesQueryOptions(),
   });
 
-  const isLoading = todayLoading && savedLoading;
+  const isLoading = todayLoading || savedLoading;
 
   const saveMutation = useSaveRecipe({
     mutation: {
       onSuccess: () => {
-        setIsSaved(true);
+        setIsSavedLocal(true);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         queryClient.invalidateQueries({ queryKey: getGetSavedRecipesQueryKey() });
       },
@@ -133,6 +133,7 @@ export default function RecipeDetailScreen() {
   const savedRecipe = savedData?.recipes?.find((sr) => String(sr.id) === String(id));
   const recipe = todayRecipe ?? (savedRecipe ? { id: savedRecipe.id, mealType: "Saved", recipe: savedRecipe.recipe, date: savedRecipe.savedAt } : undefined);
   const recipeData = recipe?.recipe;
+  const isSaved = isSavedLocal || !!savedData?.recipes?.some((sr) => String(sr.id) === String(id));
 
   const toggleIngredient = (i: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
