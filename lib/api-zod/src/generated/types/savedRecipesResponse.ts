@@ -5,7 +5,8 @@
  * NutriSnap API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { SavedRecipeItem } from "./savedRecipeItem";
 
-export interface HealthStatus {
-  status: string;
+export interface SavedRecipesResponse {
+  recipes: SavedRecipeItem[];
 }

@@ -5,7 +5,8 @@
  * NutriSnap API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { UserProfileData } from "./userProfileData";
 
-export interface HealthStatus {
-  status: string;
+export interface UserProfileResponse {
+  profile: UserProfileData | null;
 }

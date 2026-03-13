@@ -3,13 +3,23 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: NutriSnap API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: Auth
+    description: Browser and mobile authentication endpoints.
+  - name: profile
+    description: User profile and onboarding
+  - name: recipes
+    description: Daily recipe generation and saved recipes
+  - name: shopping
+    description: Shopping list management
+  - name: streaks
+    description: Cooking streak tracking
 paths:
   /healthz:
     get:
@@ -24,7 +34,385 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /auth/user:
+    get:
+      tags: [Auth]
+      operationId: getCurrentAuthUser
+      summary: Get the currently authenticated user
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      responses:
+        '200':
+          description: Auth status resolved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthUserEnvelope'
+  /login:
+    get:
+      tags: [Auth]
+      operationId: beginBrowserLogin
+      summary: Start the browser OIDC login flow
+      parameters:
+        - name: returnTo
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to the OIDC authorization endpoint.
+  /callback:
+    get:
+      tags: [Auth]
+      operationId: handleBrowserLoginCallback
+      summary: Complete the browser OIDC login flow
+      parameters:
+        - name: code
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: iss
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uri
+      responses:
+        '302':
+          description: Redirect to returnTo path.
+  /logout:
+    get:
+      tags: [Auth]
+      operationId: logoutBrowserSession
+      summary: Clear the session and begin OIDC logout
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      responses:
+        '302':
+          description: Redirect to the OIDC provider logout URL.
+  /mobile-auth/token-exchange:
+    post:
+      tags: [Auth]
+      operationId: exchangeMobileAuthorizationCode
+      summary: Exchange a mobile OIDC code for a session token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MobileTokenExchangeRequest'
+      responses:
+        '200':
+          description: Session created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobileTokenExchangeSuccess'
+        '400':
+          description: Missing or invalid required fields.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /mobile-auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logoutMobileSession
+      summary: Delete a mobile session token
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+      responses:
+        '200':
+          description: Logout processed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutSuccess'
+
+  /profile:
+    get:
+      tags: [profile]
+      operationId: getProfile
+      summary: Get current user profile
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfileResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+    put:
+      tags: [profile]
+      operationId: updateProfile
+      summary: Create or update user profile (onboarding)
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        '200':
+          description: Profile saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfileResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /recipes/daily:
+    get:
+      tags: [recipes]
+      operationId: getDailyRecipes
+      summary: Get today's 3 recipes (breakfast, lunch, dinner)
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+        - name: date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Daily recipes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyRecipesResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /recipes/saved:
+    get:
+      tags: [recipes]
+      operationId: getSavedRecipes
+      summary: Get all saved recipes
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      responses:
+        '200':
+          description: Saved recipes list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedRecipesResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+    post:
+      tags: [recipes]
+      operationId: saveRecipe
+      summary: Save a recipe to favorites
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveRecipeRequest'
+      responses:
+        '201':
+          description: Recipe saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedRecipeItem'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /recipes/saved/{id}:
+    delete:
+      tags: [recipes]
+      operationId: deleteSavedRecipe
+      summary: Remove a saved recipe
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Recipe removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /shopping-list:
+    get:
+      tags: [shopping]
+      operationId: getShoppingList
+      summary: Get shopping list for a date
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+        - name: date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Shopping list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShoppingListResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /shopping-list/check:
+    post:
+      tags: [shopping]
+      operationId: toggleShoppingItem
+      summary: Toggle an item checked/unchecked
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ToggleShoppingItemRequest'
+      responses:
+        '200':
+          description: Updated shopping list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShoppingListResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /streaks:
+    get:
+      tags: [streaks]
+      operationId: getStreak
+      summary: Get current streak data
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      responses:
+        '200':
+          description: Streak info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StreakResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /streaks/log:
+    post:
+      tags: [streaks]
+      operationId: logCookedMeal
+      summary: Log a cooked meal and update streak
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogCookedMealRequest'
+      responses:
+        '200':
+          description: Updated streak
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StreakResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
 components:
+  parameters:
+    AuthorizationSessionHeader:
+      name: Authorization
+      in: header
+      required: false
+      description: Opaque session token — `Bearer <sid>`.
+      schema:
+        type: string
+    SessionCookie:
+      name: sid
+      in: cookie
+      required: false
+      description: Browser session cookie.
+      schema:
+        type: string
+
   schemas:
     HealthStatus:
       type: object
@@ -34,3 +422,300 @@ components:
       required:
         - status
 
+    AuthUser:
+      type: object
+      required: [id, email, firstName, lastName, profileImageUrl]
+      properties:
+        id:
+          type: string
+        email:
+          type: [string, 'null']
+          format: email
+        firstName:
+          type: [string, 'null']
+        lastName:
+          type: [string, 'null']
+        profileImageUrl:
+          type: [string, 'null']
+    AuthUserEnvelope:
+      type: object
+      required: [user]
+      properties:
+        user:
+          oneOf:
+            - $ref: '#/components/schemas/AuthUser'
+            - type: 'null'
+    MobileTokenExchangeRequest:
+      type: object
+      required: [code, code_verifier, redirect_uri, state]
+      properties:
+        code:
+          type: string
+          minLength: 1
+        code_verifier:
+          type: string
+          minLength: 1
+        redirect_uri:
+          type: string
+          minLength: 1
+          format: uri
+        state:
+          type: string
+          minLength: 1
+        nonce:
+          type: string
+          minLength: 1
+    MobileTokenExchangeSuccess:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+    LogoutSuccess:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+          const: true
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+    SuccessResponse:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        dietType:
+          type: string
+        allergies:
+          type: array
+          items:
+            type: string
+        healthGoal:
+          type: string
+        skillLevel:
+          type: string
+        caloriesTarget:
+          type: integer
+        city:
+          type: string
+        country:
+          type: string
+        lat:
+          type: number
+        lng:
+          type: number
+
+    UserProfileData:
+      type: object
+      required: [userId]
+      properties:
+        userId:
+          type: string
+        dietType:
+          type: [string, 'null']
+        allergies:
+          type: array
+          items:
+            type: string
+        healthGoal:
+          type: [string, 'null']
+        skillLevel:
+          type: [string, 'null']
+        caloriesTarget:
+          type: [integer, 'null']
+        city:
+          type: [string, 'null']
+        country:
+          type: [string, 'null']
+        lat:
+          type: [number, 'null']
+        lng:
+          type: [number, 'null']
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    UserProfileResponse:
+      type: object
+      required: [profile]
+      properties:
+        profile:
+          oneOf:
+            - $ref: '#/components/schemas/UserProfileData'
+            - type: 'null'
+
+    RecipeObject:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        prepTime:
+          type: integer
+        cookTime:
+          type: integer
+        servings:
+          type: integer
+        calories:
+          type: integer
+        protein:
+          type: integer
+        carbs:
+          type: integer
+        fat:
+          type: integer
+        ingredients:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              amount:
+                type: string
+              unit:
+                type: string
+        steps:
+          type: array
+          items:
+            type: string
+        healthBenefits:
+          type: array
+          items:
+            type: string
+        tags:
+          type: array
+          items:
+            type: string
+        imageUrl:
+          type: [string, 'null']
+
+    DailyRecipeItem:
+      type: object
+      required: [id, mealType, recipe, date]
+      properties:
+        id:
+          type: string
+        mealType:
+          type: string
+        recipe:
+          $ref: '#/components/schemas/RecipeObject'
+        date:
+          type: string
+          format: date
+        wasRegenerated:
+          type: boolean
+
+    DailyRecipesResponse:
+      type: object
+      required: [recipes, date]
+      properties:
+        recipes:
+          type: array
+          items:
+            $ref: '#/components/schemas/DailyRecipeItem'
+        date:
+          type: string
+          format: date
+
+    SaveRecipeRequest:
+      type: object
+      required: [recipeJson]
+      properties:
+        recipeJson:
+          $ref: '#/components/schemas/RecipeObject'
+
+    SavedRecipeItem:
+      type: object
+      required: [id, recipe, savedAt]
+      properties:
+        id:
+          type: string
+        recipe:
+          $ref: '#/components/schemas/RecipeObject'
+        savedAt:
+          type: string
+          format: date-time
+
+    SavedRecipesResponse:
+      type: object
+      required: [recipes]
+      properties:
+        recipes:
+          type: array
+          items:
+            $ref: '#/components/schemas/SavedRecipeItem'
+
+    ShoppingListItem:
+      type: object
+      required: [name, amount, unit, category]
+      properties:
+        name:
+          type: string
+        amount:
+          type: string
+        unit:
+          type: string
+        category:
+          type: string
+        checked:
+          type: boolean
+
+    ShoppingListResponse:
+      type: object
+      required: [items, date]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ShoppingListItem'
+        date:
+          type: string
+          format: date
+        id:
+          type: [string, 'null']
+
+    ToggleShoppingItemRequest:
+      type: object
+      required: [date, itemName, checked]
+      properties:
+        date:
+          type: string
+          format: date
+        itemName:
+          type: string
+        checked:
+          type: boolean
+
+    StreakResponse:
+      type: object
+      required: [currentStreak, longestStreak]
+      properties:
+        currentStreak:
+          type: integer
+        longestStreak:
+          type: integer
+        lastCookedAt:
+          type: [string, 'null']
+          format: date-time
+
+    LogCookedMealRequest:
+      type: object
+      required: [recipeId]
+      properties:
+        recipeId:
+          type: string

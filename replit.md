@@ -4,20 +4,74 @@
 
 pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
 
-## NutriSnap Design Mockup
+## NutriSnap
 
-A full UI design mockup for NutriSnap — an AI-powered personalised healthy recipe app targeting Gen Z / young Millennials. Built in the mockup sandbox with 5 interactive screens:
+An AI-powered personalised healthy recipe app targeting Gen Z / young Millennials (16–30). Generates 3 whole-food recipes per day (breakfast, lunch, dinner) based on dietary preferences, health goals, seasonal ingredient availability, and nearby stores.
 
+### Design Mockup
+
+Built in the mockup sandbox with 7 interactive screens:
+
+- **SignIn** — 4 states: welcome/signup/signin/forgot password
+- **Onboarding** — 5-step flow (diet type, allergies, health goal, skill level, location)
 - **HomeFeed** — Daily recipe feed with macro rings, streak counter, horizontal-scroll recipe cards
 - **RecipeDetail** — Full-bleed hero image, macros, tap-to-check ingredients & steps, health benefits, smart swap
-- **Onboarding** — 5-step onboarding flow (diet type, allergies, health goal, skill level, location)
 - **ShoppingList** — Grouped shopping list with nearby store cards, check-off, bulk actions
 - **Profile** — Streak milestones, weekly macro bar chart, saved recipes, TikTok share CTA
+- **LandingPage** — Marketing landing page with pricing/FAQ/testimonials
 
 Design spec:
 - Primary: #22C55E (green) · Accent: #F97316 (orange) · Dark bg: #0F1710 · Cards: #1C2B1E
 - Typography: Plus Jakarta Sans (headings), Inter (body)
 - All components live in `artifacts/mockup-sandbox/src/components/mockups/nutrisnap/`
+
+### Database Schema (6 tables)
+
+- **sessions** — Replit Auth session store (sid, sess JSONB, expire)
+- **users** — Replit Auth users (id, email, firstName, lastName, profileImageUrl)
+- **user_profiles** — Onboarding data (dietType, allergies[], healthGoal, skillLevel, caloriesTarget, city/country/lat/lng)
+- **daily_recipes** — Generated daily recipes (userId, date, mealType, recipeJson JSONB, wasRegenerated)
+- **saved_recipes** — User-saved favorites (userId, recipeJson JSONB)
+- **shopping_lists** — Auto-generated shopping lists (userId, date, itemsJson JSONB, checkedItems[])
+- **user_streaks** — Cooking streak tracking (currentStreak, longestStreak, lastCookedAt)
+
+### API Endpoints
+
+All routes mounted at `/api`:
+
+**Auth (Replit Auth OIDC)**
+- `GET /auth/user` — current authenticated user
+- `GET /login` — browser OIDC login redirect
+- `GET /callback` — OIDC callback
+- `GET /logout` — session clear + OIDC logout
+- `POST /mobile-auth/token-exchange` — mobile auth code exchange
+- `POST /mobile-auth/logout` — mobile session deletion
+
+**Profile**
+- `GET /profile` — get user profile (protected)
+- `PUT /profile` — upsert profile/onboarding data (protected)
+
+**Recipes**
+- `GET /recipes/daily?date=` — get daily recipes for a date (protected)
+- `GET /recipes/saved` — list saved recipes (protected)
+- `POST /recipes/saved` — save a recipe (protected)
+- `DELETE /recipes/saved/:id` — remove saved recipe (protected)
+
+**Shopping**
+- `GET /shopping-list?date=` — get shopping list for a date (protected)
+- `POST /shopping-list/check` — toggle item checked/unchecked (protected)
+
+**Streaks**
+- `GET /streaks` — get current streak data (protected)
+- `POST /streaks/log` — log a cooked meal, update streak (protected)
+
+### Authentication
+
+Uses Replit Auth (OpenID Connect with PKCE). Key files:
+- `artifacts/api-server/src/lib/auth.ts` — session CRUD, OIDC config
+- `artifacts/api-server/src/middlewares/authMiddleware.ts` — loads user from session
+- `artifacts/api-server/src/routes/auth.ts` — login/callback/logout routes
+- `lib/db/src/schema/auth.ts` — sessions + users tables
 
 ## Stack
 
@@ -27,6 +81,7 @@ Design spec:
 - **TypeScript version**: 5.9
 - **API framework**: Express 5
 - **Database**: PostgreSQL + Drizzle ORM
+- **Auth**: Replit Auth (openid-client v6)
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)
@@ -70,9 +125,11 @@ Every package extends `tsconfig.base.json` which sets `composite: true`. The roo
 Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` for request and response validation and `@workspace/db` for persistence.
 
 - Entry: `src/index.ts` — reads `PORT`, starts Express
-- App setup: `src/app.ts` — mounts CORS, JSON/urlencoded parsing, routes at `/api`
-- Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health` (full path: `/api/health`)
-- Depends on: `@workspace/db`, `@workspace/api-zod`
+- App setup: `src/app.ts` — mounts CORS (credentials+origin), cookieParser, JSON/urlencoded, authMiddleware, routes at `/api`
+- Routes: `src/routes/index.ts` mounts sub-routers (health, auth, profile, recipes, shopping, streaks)
+- Auth middleware: `src/middlewares/authMiddleware.ts` — loads user from session on every request
+- Auth lib: `src/lib/auth.ts` — session CRUD, OIDC config helper
+- Depends on: `@workspace/db`, `@workspace/api-zod`, `openid-client`
 - `pnpm --filter @workspace/api-server run dev` — run the dev server
 - `pnpm --filter @workspace/api-server run build` — production esbuild bundle (`dist/index.cjs`)
 - Build bundles an allowlist of deps (express, cors, pg, drizzle-orm, zod, etc.) and externalizes the rest
@@ -83,7 +140,12 @@ Database layer using Drizzle ORM with PostgreSQL. Exports a Drizzle client insta
 
 - `src/index.ts` — creates a `Pool` + Drizzle instance, exports schema
 - `src/schema/index.ts` — barrel re-export of all models
-- `src/schema/<modelname>.ts` — table definitions with `drizzle-zod` insert schemas (no models definitions exist right now)
+- `src/schema/auth.ts` — sessions + users tables (Replit Auth)
+- `src/schema/userProfiles.ts` — user onboarding/diet data
+- `src/schema/dailyRecipes.ts` — daily AI-generated recipes
+- `src/schema/savedRecipes.ts` — user-saved recipe favorites
+- `src/schema/shoppingLists.ts` — shopping lists with checked items
+- `src/schema/userStreaks.ts` — cooking streak tracking
 - `drizzle.config.ts` — Drizzle Kit config (requires `DATABASE_URL`, automatically provided by Replit)
 - Exports: `.` (pool, db, schema), `./schema` (schema only)
 
@@ -100,11 +162,11 @@ Run codegen: `pnpm --filter @workspace/api-spec run codegen`
 
 ### `lib/api-zod` (`@workspace/api-zod`)
 
-Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`). Used by `api-server` for response validation.
+Generated Zod schemas from the OpenAPI spec. Used by `api-server` for request/response validation. Key schemas: `GetProfileResponse`, `UpdateProfileBody`, `GetDailyRecipesResponse`, `SaveRecipeBody`, `GetShoppingListResponse`, `ToggleShoppingItemBody`, `GetStreakResponse`, `LogCookedMealBody`.
 
 ### `lib/api-client-react` (`@workspace/api-client-react`)
 
-Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHealthCheck`, `healthCheck`).
+Generated React Query hooks and fetch client from the OpenAPI spec.
 
 ### `scripts` (`@workspace/scripts`)
 
