@@ -6,5 +6,6 @@ export const modules: ModuleMap = {
   "./components/mockups/nutrisnap/Onboarding.tsx": () => import("../components/mockups/nutrisnap/Onboarding.tsx"),
   "./components/mockups/nutrisnap/Profile.tsx": () => import("../components/mockups/nutrisnap/Profile.tsx"),
   "./components/mockups/nutrisnap/RecipeDetail.tsx": () => import("../components/mockups/nutrisnap/RecipeDetail.tsx"),
-  "./components/mockups/nutrisnap/ShoppingList.tsx": () => import("../components/mockups/nutrisnap/ShoppingList.tsx")
+  "./components/mockups/nutrisnap/ShoppingList.tsx": () => import("../components/mockups/nutrisnap/ShoppingList.tsx"),
+  "./components/mockups/nutrisnap/SignIn.tsx": () => import("../components/mockups/nutrisnap/SignIn.tsx")
 };
