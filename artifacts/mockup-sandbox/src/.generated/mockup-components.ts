@@ -2,6 +2,7 @@
 type ModuleMap = Record<string, () => Promise<Record<string, unknown>>>;
 export const modules: ModuleMap = {
   "./components/mockups/nutrisnap/HomeFeed.tsx": () => import("../components/mockups/nutrisnap/HomeFeed.tsx"),
+  "./components/mockups/nutrisnap/LandingPage.tsx": () => import("../components/mockups/nutrisnap/LandingPage.tsx"),
   "./components/mockups/nutrisnap/Onboarding.tsx": () => import("../components/mockups/nutrisnap/Onboarding.tsx"),
   "./components/mockups/nutrisnap/Profile.tsx": () => import("../components/mockups/nutrisnap/Profile.tsx"),
   "./components/mockups/nutrisnap/RecipeDetail.tsx": () => import("../components/mockups/nutrisnap/RecipeDetail.tsx"),
