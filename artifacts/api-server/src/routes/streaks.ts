@@ -1,15 +1,17 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import {
   GetStreakResponse,
-  LogCookedMealBody,
-  LogCookedMealResponse,
+  UpdateStreakBody,
+  UpdateStreakResponse,
 } from "@workspace/api-zod";
 import { db, userStreaksTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
+const FORTY_EIGHT_HOURS_MS = 48 * 60 * 60 * 1000;
+
 const router: IRouter = Router();
 
-router.get("/streaks", async (req: Request, res: Response) => {
+router.get("/streak", async (req: Request, res: Response) => {
   if (!req.isAuthenticated()) {
     res.status(401).json({ error: "Unauthorized" });
     return;
@@ -29,20 +31,19 @@ router.get("/streaks", async (req: Request, res: Response) => {
   );
 });
 
-router.post("/streaks/log", async (req: Request, res: Response) => {
+router.patch("/streak", async (req: Request, res: Response) => {
   if (!req.isAuthenticated()) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
 
-  const parsed = LogCookedMealBody.safeParse(req.body);
+  const parsed = UpdateStreakBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid request body" });
     return;
   }
 
   const now = new Date();
-  const todayStr = now.toISOString().split("T")[0];
 
   const [existing] = await db
     .select()
@@ -54,28 +55,14 @@ router.post("/streaks/log", async (req: Request, res: Response) => {
 
   if (existing) {
     const lastCooked = existing.lastCookedAt;
+
     if (lastCooked) {
-      const lastCookedStr = lastCooked.toISOString().split("T")[0];
+      const elapsed = now.getTime() - lastCooked.getTime();
 
-      if (lastCookedStr === todayStr) {
-        res.json(
-          LogCookedMealResponse.parse({
-            currentStreak: existing.currentStreak,
-            longestStreak: existing.longestStreak,
-            lastCookedAt: existing.lastCookedAt ?? null,
-          }),
-        );
-        return;
-      }
-
-      const yesterday = new Date(now);
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split("T")[0];
-
-      if (lastCookedStr === yesterdayStr) {
-        currentStreak = existing.currentStreak + 1;
-      } else {
+      if (elapsed > FORTY_EIGHT_HOURS_MS) {
         currentStreak = 1;
+      } else {
+        currentStreak = existing.currentStreak + 1;
       }
     }
 
@@ -99,7 +86,7 @@ router.post("/streaks/log", async (req: Request, res: Response) => {
   }
 
   res.json(
-    LogCookedMealResponse.parse({
+    UpdateStreakResponse.parse({
       currentStreak,
       longestStreak,
       lastCookedAt: now,

@@ -19,16 +19,17 @@ import type {
 import type {
   AuthUserEnvelope,
   BeginBrowserLoginParams,
+  DailyRecipeItem,
   DailyRecipesResponse,
   ErrorEnvelope,
-  GetDailyRecipesParams,
   GetShoppingListParams,
+  GetTodayRecipesParams,
   HandleBrowserLoginCallbackParams,
   HealthStatus,
-  LogCookedMealRequest,
   LogoutSuccess,
   MobileTokenExchangeRequest,
   MobileTokenExchangeSuccess,
+  RegenerateRecipeRequest,
   SaveRecipeRequest,
   SavedRecipeItem,
   SavedRecipesResponse,
@@ -37,6 +38,8 @@ import type {
   SuccessResponse,
   ToggleShoppingItemRequest,
   UpdateProfileRequest,
+  UpdateStreakRequest,
+  UpsertShoppingListRequest,
   UserProfileResponse,
 } from "./api.schemas";
 
@@ -128,29 +131,29 @@ export function useHealthCheck<
 /**
  * @summary Get the currently authenticated user
  */
-export const getGetCurrentAuthUserUrl = () => {
-  return `/api/auth/user`;
+export const getGetCurrentUserUrl = () => {
+  return `/api/me`;
 };
 
-export const getCurrentAuthUser = async (
+export const getCurrentUser = async (
   options?: RequestInit,
 ): Promise<AuthUserEnvelope> => {
-  return customFetch<AuthUserEnvelope>(getGetCurrentAuthUserUrl(), {
+  return customFetch<AuthUserEnvelope>(getGetCurrentUserUrl(), {
     ...options,
     method: "GET",
   });
 };
 
-export const getGetCurrentAuthUserQueryKey = () => {
-  return [`/api/auth/user`] as const;
+export const getGetCurrentUserQueryKey = () => {
+  return [`/api/me`] as const;
 };
 
-export const getGetCurrentAuthUserQueryOptions = <
-  TData = Awaited<ReturnType<typeof getCurrentAuthUser>>,
+export const getGetCurrentUserQueryOptions = <
+  TData = Awaited<ReturnType<typeof getCurrentUser>>,
   TError = ErrorType<unknown>,
 >(options?: {
   query?: UseQueryOptions<
-    Awaited<ReturnType<typeof getCurrentAuthUser>>,
+    Awaited<ReturnType<typeof getCurrentUser>>,
     TError,
     TData
   >;
@@ -158,40 +161,40 @@ export const getGetCurrentAuthUserQueryOptions = <
 }) => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
-  const queryKey = queryOptions?.queryKey ?? getGetCurrentAuthUserQueryKey();
+  const queryKey = queryOptions?.queryKey ?? getGetCurrentUserQueryKey();
 
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof getCurrentAuthUser>>
-  > = ({ signal }) => getCurrentAuthUser({ signal, ...requestOptions });
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getCurrentUser>>> = ({
+    signal,
+  }) => getCurrentUser({ signal, ...requestOptions });
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
-    Awaited<ReturnType<typeof getCurrentAuthUser>>,
+    Awaited<ReturnType<typeof getCurrentUser>>,
     TError,
     TData
   > & { queryKey: QueryKey };
 };
 
-export type GetCurrentAuthUserQueryResult = NonNullable<
-  Awaited<ReturnType<typeof getCurrentAuthUser>>
+export type GetCurrentUserQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getCurrentUser>>
 >;
-export type GetCurrentAuthUserQueryError = ErrorType<unknown>;
+export type GetCurrentUserQueryError = ErrorType<unknown>;
 
 /**
  * @summary Get the currently authenticated user
  */
 
-export function useGetCurrentAuthUser<
-  TData = Awaited<ReturnType<typeof getCurrentAuthUser>>,
+export function useGetCurrentUser<
+  TData = Awaited<ReturnType<typeof getCurrentUser>>,
   TError = ErrorType<unknown>,
 >(options?: {
   query?: UseQueryOptions<
-    Awaited<ReturnType<typeof getCurrentAuthUser>>,
+    Awaited<ReturnType<typeof getCurrentUser>>,
     TError,
     TData
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getGetCurrentAuthUserQueryOptions(options);
+  const queryOptions = getGetCurrentUserQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
@@ -404,7 +407,7 @@ export function useHandleBrowserLoginCallback<
  * @summary Clear the session and begin OIDC logout
  */
 export const getLogoutBrowserSessionUrl = () => {
-  return `/api/logout`;
+  return `/api/auth/logout`;
 };
 
 export const logoutBrowserSession = async (
@@ -417,7 +420,7 @@ export const logoutBrowserSession = async (
 };
 
 export const getLogoutBrowserSessionQueryKey = () => {
-  return [`/api/logout`] as const;
+  return [`/api/auth/logout`] as const;
 };
 
 export const getLogoutBrowserSessionQueryOptions = <
@@ -813,7 +816,7 @@ export const useUpdateProfile = <
 /**
  * @summary Get today's 3 recipes (breakfast, lunch, dinner)
  */
-export const getGetDailyRecipesUrl = (params?: GetDailyRecipesParams) => {
+export const getGetTodayRecipesUrl = (params?: GetTodayRecipesParams) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -825,32 +828,32 @@ export const getGetDailyRecipesUrl = (params?: GetDailyRecipesParams) => {
   const stringifiedParams = normalizedParams.toString();
 
   return stringifiedParams.length > 0
-    ? `/api/recipes/daily?${stringifiedParams}`
-    : `/api/recipes/daily`;
+    ? `/api/recipes/today?${stringifiedParams}`
+    : `/api/recipes/today`;
 };
 
-export const getDailyRecipes = async (
-  params?: GetDailyRecipesParams,
+export const getTodayRecipes = async (
+  params?: GetTodayRecipesParams,
   options?: RequestInit,
 ): Promise<DailyRecipesResponse> => {
-  return customFetch<DailyRecipesResponse>(getGetDailyRecipesUrl(params), {
+  return customFetch<DailyRecipesResponse>(getGetTodayRecipesUrl(params), {
     ...options,
     method: "GET",
   });
 };
 
-export const getGetDailyRecipesQueryKey = (params?: GetDailyRecipesParams) => {
-  return [`/api/recipes/daily`, ...(params ? [params] : [])] as const;
+export const getGetTodayRecipesQueryKey = (params?: GetTodayRecipesParams) => {
+  return [`/api/recipes/today`, ...(params ? [params] : [])] as const;
 };
 
-export const getGetDailyRecipesQueryOptions = <
-  TData = Awaited<ReturnType<typeof getDailyRecipes>>,
+export const getGetTodayRecipesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getTodayRecipes>>,
   TError = ErrorType<ErrorEnvelope>,
 >(
-  params?: GetDailyRecipesParams,
+  params?: GetTodayRecipesParams,
   options?: {
     query?: UseQueryOptions<
-      Awaited<ReturnType<typeof getDailyRecipes>>,
+      Awaited<ReturnType<typeof getTodayRecipes>>,
       TError,
       TData
     >;
@@ -859,43 +862,43 @@ export const getGetDailyRecipesQueryOptions = <
 ) => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
-  const queryKey = queryOptions?.queryKey ?? getGetDailyRecipesQueryKey(params);
+  const queryKey = queryOptions?.queryKey ?? getGetTodayRecipesQueryKey(params);
 
-  const queryFn: QueryFunction<Awaited<ReturnType<typeof getDailyRecipes>>> = ({
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getTodayRecipes>>> = ({
     signal,
-  }) => getDailyRecipes(params, { signal, ...requestOptions });
+  }) => getTodayRecipes(params, { signal, ...requestOptions });
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
-    Awaited<ReturnType<typeof getDailyRecipes>>,
+    Awaited<ReturnType<typeof getTodayRecipes>>,
     TError,
     TData
   > & { queryKey: QueryKey };
 };
 
-export type GetDailyRecipesQueryResult = NonNullable<
-  Awaited<ReturnType<typeof getDailyRecipes>>
+export type GetTodayRecipesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getTodayRecipes>>
 >;
-export type GetDailyRecipesQueryError = ErrorType<ErrorEnvelope>;
+export type GetTodayRecipesQueryError = ErrorType<ErrorEnvelope>;
 
 /**
  * @summary Get today's 3 recipes (breakfast, lunch, dinner)
  */
 
-export function useGetDailyRecipes<
-  TData = Awaited<ReturnType<typeof getDailyRecipes>>,
+export function useGetTodayRecipes<
+  TData = Awaited<ReturnType<typeof getTodayRecipes>>,
   TError = ErrorType<ErrorEnvelope>,
 >(
-  params?: GetDailyRecipesParams,
+  params?: GetTodayRecipesParams,
   options?: {
     query?: UseQueryOptions<
-      Awaited<ReturnType<typeof getDailyRecipes>>,
+      Awaited<ReturnType<typeof getTodayRecipes>>,
       TError,
       TData
     >;
     request?: SecondParameter<typeof customFetch>;
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getGetDailyRecipesQueryOptions(params, options);
+  const queryOptions = getGetTodayRecipesQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
@@ -905,10 +908,96 @@ export function useGetDailyRecipes<
 }
 
 /**
+ * @summary Regenerate a specific meal's recipe
+ */
+export const getRegenerateRecipeUrl = () => {
+  return `/api/recipes/regenerate`;
+};
+
+export const regenerateRecipe = async (
+  regenerateRecipeRequest: RegenerateRecipeRequest,
+  options?: RequestInit,
+): Promise<DailyRecipeItem> => {
+  return customFetch<DailyRecipeItem>(getRegenerateRecipeUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(regenerateRecipeRequest),
+  });
+};
+
+export const getRegenerateRecipeMutationOptions = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof regenerateRecipe>>,
+    TError,
+    { data: BodyType<RegenerateRecipeRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof regenerateRecipe>>,
+  TError,
+  { data: BodyType<RegenerateRecipeRequest> },
+  TContext
+> => {
+  const mutationKey = ["regenerateRecipe"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof regenerateRecipe>>,
+    { data: BodyType<RegenerateRecipeRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return regenerateRecipe(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RegenerateRecipeMutationResult = NonNullable<
+  Awaited<ReturnType<typeof regenerateRecipe>>
+>;
+export type RegenerateRecipeMutationBody = BodyType<RegenerateRecipeRequest>;
+export type RegenerateRecipeMutationError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Regenerate a specific meal's recipe
+ */
+export const useRegenerateRecipe = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof regenerateRecipe>>,
+    TError,
+    { data: BodyType<RegenerateRecipeRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof regenerateRecipe>>,
+  TError,
+  { data: BodyType<RegenerateRecipeRequest> },
+  TContext
+> => {
+  return useMutation(getRegenerateRecipeMutationOptions(options));
+};
+
+/**
  * @summary Get all saved recipes
  */
 export const getGetSavedRecipesUrl = () => {
-  return `/api/recipes/saved`;
+  return `/api/saved-recipes`;
 };
 
 export const getSavedRecipes = async (
@@ -921,7 +1010,7 @@ export const getSavedRecipes = async (
 };
 
 export const getGetSavedRecipesQueryKey = () => {
-  return [`/api/recipes/saved`] as const;
+  return [`/api/saved-recipes`] as const;
 };
 
 export const getGetSavedRecipesQueryOptions = <
@@ -983,7 +1072,7 @@ export function useGetSavedRecipes<
  * @summary Save a recipe to favorites
  */
 export const getSaveRecipeUrl = () => {
-  return `/api/recipes/saved`;
+  return `/api/saved-recipes`;
 };
 
 export const saveRecipe = async (
@@ -1069,7 +1158,7 @@ export const useSaveRecipe = <
  * @summary Remove a saved recipe
  */
 export const getDeleteSavedRecipeUrl = (id: string) => {
-  return `/api/recipes/saved/${id}`;
+  return `/api/saved-recipes/${id}`;
 };
 
 export const deleteSavedRecipe = async (
@@ -1244,6 +1333,93 @@ export function useGetShoppingList<
 }
 
 /**
+ * @summary Create or replace shopping list for a date
+ */
+export const getUpsertShoppingListUrl = () => {
+  return `/api/shopping-list`;
+};
+
+export const upsertShoppingList = async (
+  upsertShoppingListRequest: UpsertShoppingListRequest,
+  options?: RequestInit,
+): Promise<ShoppingListResponse> => {
+  return customFetch<ShoppingListResponse>(getUpsertShoppingListUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(upsertShoppingListRequest),
+  });
+};
+
+export const getUpsertShoppingListMutationOptions = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof upsertShoppingList>>,
+    TError,
+    { data: BodyType<UpsertShoppingListRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof upsertShoppingList>>,
+  TError,
+  { data: BodyType<UpsertShoppingListRequest> },
+  TContext
+> => {
+  const mutationKey = ["upsertShoppingList"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof upsertShoppingList>>,
+    { data: BodyType<UpsertShoppingListRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return upsertShoppingList(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpsertShoppingListMutationResult = NonNullable<
+  Awaited<ReturnType<typeof upsertShoppingList>>
+>;
+export type UpsertShoppingListMutationBody =
+  BodyType<UpsertShoppingListRequest>;
+export type UpsertShoppingListMutationError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Create or replace shopping list for a date
+ */
+export const useUpsertShoppingList = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof upsertShoppingList>>,
+    TError,
+    { data: BodyType<UpsertShoppingListRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof upsertShoppingList>>,
+  TError,
+  { data: BodyType<UpsertShoppingListRequest> },
+  TContext
+> => {
+  return useMutation(getUpsertShoppingListMutationOptions(options));
+};
+
+/**
  * @summary Toggle an item checked/unchecked
  */
 export const getToggleShoppingItemUrl = () => {
@@ -1256,7 +1432,7 @@ export const toggleShoppingItem = async (
 ): Promise<ShoppingListResponse> => {
   return customFetch<ShoppingListResponse>(getToggleShoppingItemUrl(), {
     ...options,
-    method: "POST",
+    method: "PATCH",
     headers: { "Content-Type": "application/json", ...options?.headers },
     body: JSON.stringify(toggleShoppingItemRequest),
   });
@@ -1331,10 +1507,96 @@ export const useToggleShoppingItem = <
 };
 
 /**
+ * @summary Log a cooked meal and update streak (48-hour reset)
+ */
+export const getUpdateStreakUrl = () => {
+  return `/api/streak`;
+};
+
+export const updateStreak = async (
+  updateStreakRequest: UpdateStreakRequest,
+  options?: RequestInit,
+): Promise<StreakResponse> => {
+  return customFetch<StreakResponse>(getUpdateStreakUrl(), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateStreakRequest),
+  });
+};
+
+export const getUpdateStreakMutationOptions = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateStreak>>,
+    TError,
+    { data: BodyType<UpdateStreakRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateStreak>>,
+  TError,
+  { data: BodyType<UpdateStreakRequest> },
+  TContext
+> => {
+  const mutationKey = ["updateStreak"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateStreak>>,
+    { data: BodyType<UpdateStreakRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateStreak(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateStreakMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateStreak>>
+>;
+export type UpdateStreakMutationBody = BodyType<UpdateStreakRequest>;
+export type UpdateStreakMutationError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Log a cooked meal and update streak (48-hour reset)
+ */
+export const useUpdateStreak = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateStreak>>,
+    TError,
+    { data: BodyType<UpdateStreakRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateStreak>>,
+  TError,
+  { data: BodyType<UpdateStreakRequest> },
+  TContext
+> => {
+  return useMutation(getUpdateStreakMutationOptions(options));
+};
+
+/**
  * @summary Get current streak data
  */
 export const getGetStreakUrl = () => {
-  return `/api/streaks`;
+  return `/api/streak`;
 };
 
 export const getStreak = async (
@@ -1347,7 +1609,7 @@ export const getStreak = async (
 };
 
 export const getGetStreakQueryKey = () => {
-  return [`/api/streaks`] as const;
+  return [`/api/streak`] as const;
 };
 
 export const getGetStreakQueryOptions = <
@@ -1396,89 +1658,3 @@ export function useGetStreak<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
-
-/**
- * @summary Log a cooked meal and update streak
- */
-export const getLogCookedMealUrl = () => {
-  return `/api/streaks/log`;
-};
-
-export const logCookedMeal = async (
-  logCookedMealRequest: LogCookedMealRequest,
-  options?: RequestInit,
-): Promise<StreakResponse> => {
-  return customFetch<StreakResponse>(getLogCookedMealUrl(), {
-    ...options,
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(logCookedMealRequest),
-  });
-};
-
-export const getLogCookedMealMutationOptions = <
-  TError = ErrorType<ErrorEnvelope>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof logCookedMeal>>,
-    TError,
-    { data: BodyType<LogCookedMealRequest> },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof logCookedMeal>>,
-  TError,
-  { data: BodyType<LogCookedMealRequest> },
-  TContext
-> => {
-  const mutationKey = ["logCookedMeal"];
-  const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof logCookedMeal>>,
-    { data: BodyType<LogCookedMealRequest> }
-  > = (props) => {
-    const { data } = props ?? {};
-
-    return logCookedMeal(data, requestOptions);
-  };
-
-  return { mutationFn, ...mutationOptions };
-};
-
-export type LogCookedMealMutationResult = NonNullable<
-  Awaited<ReturnType<typeof logCookedMeal>>
->;
-export type LogCookedMealMutationBody = BodyType<LogCookedMealRequest>;
-export type LogCookedMealMutationError = ErrorType<ErrorEnvelope>;
-
-/**
- * @summary Log a cooked meal and update streak
- */
-export const useLogCookedMeal = <
-  TError = ErrorType<ErrorEnvelope>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof logCookedMeal>>,
-    TError,
-    { data: BodyType<LogCookedMealRequest> },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationResult<
-  Awaited<ReturnType<typeof logCookedMeal>>,
-  TError,
-  { data: BodyType<LogCookedMealRequest> },
-  TContext
-> => {
-  return useMutation(getLogCookedMealMutationOptions(options));
-};

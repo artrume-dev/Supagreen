@@ -1,7 +1,7 @@
 import * as oidc from "openid-client";
 import { Router, type IRouter, type Request, type Response } from "express";
 import {
-  GetCurrentAuthUserResponse,
+  GetCurrentUserResponse,
   ExchangeMobileAuthorizationCodeBody,
   ExchangeMobileAuthorizationCodeResponse,
   LogoutMobileSessionResponse,
@@ -82,9 +82,9 @@ async function upsertUser(claims: Record<string, unknown>) {
   return user;
 }
 
-router.get("/auth/user", (req: Request, res: Response) => {
+router.get("/me", (req: Request, res: Response) => {
   res.json(
-    GetCurrentAuthUserResponse.parse({
+    GetCurrentUserResponse.parse({
       user: req.isAuthenticated() ? req.user : null,
     }),
   );
@@ -187,7 +187,7 @@ router.get("/callback", async (req: Request, res: Response) => {
   res.redirect(returnTo);
 });
 
-router.get("/logout", async (req: Request, res: Response) => {
+router.get("/auth/logout", async (req: Request, res: Response) => {
   const config = await getOidcConfig();
   const origin = getOrigin(req);
 

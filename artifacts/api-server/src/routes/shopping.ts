@@ -3,6 +3,8 @@ import {
   GetShoppingListResponse,
   ToggleShoppingItemBody,
   ToggleShoppingItemResponse,
+  UpsertShoppingListBody,
+  UpsertShoppingListResponse,
 } from "@workspace/api-zod";
 import { db, shoppingListsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
@@ -35,7 +37,7 @@ router.get("/shopping-list", async (req: Request, res: Response) => {
     res.json(
       GetShoppingListResponse.parse({
         items: [],
-        date,
+        date: new Date(date),
         id: null,
       }),
     );
@@ -52,13 +54,63 @@ router.get("/shopping-list", async (req: Request, res: Response) => {
   res.json(
     GetShoppingListResponse.parse({
       items,
-      date: list.date,
+      date: new Date(list.date),
       id: list.id,
     }),
   );
 });
 
-router.post("/shopping-list/check", async (req: Request, res: Response) => {
+router.put("/shopping-list", async (req: Request, res: Response) => {
+  if (!req.isAuthenticated()) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const parsed = UpsertShoppingListBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid request body" });
+    return;
+  }
+
+  const dateVal = parsed.data.date;
+  const dateStr = typeof dateVal === "string"
+    ? dateVal
+    : (dateVal as unknown as Date).toISOString().split("T")[0];
+
+  const [list] = await db
+    .insert(shoppingListsTable)
+    .values({
+      userId: req.user.id,
+      date: dateStr,
+      itemsJson: parsed.data.items,
+      checkedItems: [],
+    })
+    .onConflictDoUpdate({
+      target: [shoppingListsTable.userId, shoppingListsTable.date],
+      set: {
+        itemsJson: parsed.data.items,
+        updatedAt: new Date(),
+      },
+    })
+    .returning();
+
+  const items = (list.itemsJson as Array<Record<string, unknown>>).map(
+    (item) => ({
+      ...item,
+      checked: (list.checkedItems ?? []).includes(item.name as string),
+    }),
+  );
+
+  res.json(
+    UpsertShoppingListResponse.parse({
+      items,
+      date: new Date(list.date),
+      id: list.id,
+    }),
+  );
+});
+
+router.patch("/shopping-list/check", async (req: Request, res: Response) => {
   if (!req.isAuthenticated()) {
     res.status(401).json({ error: "Unauthorized" });
     return;
@@ -71,9 +123,10 @@ router.post("/shopping-list/check", async (req: Request, res: Response) => {
   }
 
   const { itemName, checked } = parsed.data;
-  const dateStr = typeof parsed.data.date === "string"
-    ? parsed.data.date
-    : (parsed.data.date as unknown as Date).toISOString().split("T")[0];
+  const dateVal = parsed.data.date;
+  const dateStr = typeof dateVal === "string"
+    ? dateVal
+    : (dateVal as unknown as Date).toISOString().split("T")[0];
 
   const [list] = await db
     .select()
@@ -112,7 +165,7 @@ router.post("/shopping-list/check", async (req: Request, res: Response) => {
   res.json(
     ToggleShoppingItemResponse.parse({
       items,
-      date: list.date,
+      date: new Date(list.date),
       id: list.id,
     }),
   );

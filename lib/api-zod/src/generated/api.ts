@@ -18,14 +18,14 @@ export const HealthCheckResponse = zod.object({
 /**
  * @summary Get the currently authenticated user
  */
-export const GetCurrentAuthUserHeader = zod.object({
+export const GetCurrentUserHeader = zod.object({
   Authorization: zod
     .string()
     .optional()
     .describe("Opaque session token — `Bearer <sid>`."),
 });
 
-export const GetCurrentAuthUserResponse = zod.object({
+export const GetCurrentUserResponse = zod.object({
   user: zod.union([
     zod.object({
       id: zod.string(),
@@ -169,18 +169,18 @@ export const UpdateProfileResponse = zod.object({
 /**
  * @summary Get today's 3 recipes (breakfast, lunch, dinner)
  */
-export const GetDailyRecipesQueryParams = zod.object({
+export const GetTodayRecipesQueryParams = zod.object({
   date: zod.date().optional(),
 });
 
-export const GetDailyRecipesHeader = zod.object({
+export const GetTodayRecipesHeader = zod.object({
   Authorization: zod
     .string()
     .optional()
     .describe("Opaque session token — `Bearer <sid>`."),
 });
 
-export const GetDailyRecipesResponse = zod.object({
+export const GetTodayRecipesResponse = zod.object({
   recipes: zod.array(
     zod.object({
       id: zod.string(),
@@ -214,6 +214,54 @@ export const GetDailyRecipesResponse = zod.object({
     }),
   ),
   date: zod.date(),
+});
+
+/**
+ * @summary Regenerate a specific meal's recipe
+ */
+export const RegenerateRecipeHeader = zod.object({
+  Authorization: zod
+    .string()
+    .optional()
+    .describe("Opaque session token — `Bearer <sid>`."),
+});
+
+export const RegenerateRecipeBody = zod.object({
+  mealType: zod
+    .string()
+    .describe("The meal slot to regenerate (breakfast, lunch, dinner)"),
+  date: zod.date().optional(),
+});
+
+export const RegenerateRecipeResponse = zod.object({
+  id: zod.string(),
+  mealType: zod.string(),
+  recipe: zod.object({
+    title: zod.string().optional(),
+    description: zod.string().optional(),
+    prepTime: zod.number().optional(),
+    cookTime: zod.number().optional(),
+    servings: zod.number().optional(),
+    calories: zod.number().optional(),
+    protein: zod.number().optional(),
+    carbs: zod.number().optional(),
+    fat: zod.number().optional(),
+    ingredients: zod
+      .array(
+        zod.object({
+          name: zod.string().optional(),
+          amount: zod.string().optional(),
+          unit: zod.string().optional(),
+        }),
+      )
+      .optional(),
+    steps: zod.array(zod.string()).optional(),
+    healthBenefits: zod.array(zod.string()).optional(),
+    tags: zod.array(zod.string()).optional(),
+    imageUrl: zod.string().nullish(),
+  }),
+  date: zod.date(),
+  wasRegenerated: zod.boolean().optional(),
 });
 
 /**
@@ -343,6 +391,43 @@ export const GetShoppingListResponse = zod.object({
 });
 
 /**
+ * @summary Create or replace shopping list for a date
+ */
+export const UpsertShoppingListHeader = zod.object({
+  Authorization: zod
+    .string()
+    .optional()
+    .describe("Opaque session token — `Bearer <sid>`."),
+});
+
+export const UpsertShoppingListBody = zod.object({
+  date: zod.date(),
+  items: zod.array(
+    zod.object({
+      name: zod.string(),
+      amount: zod.string(),
+      unit: zod.string(),
+      category: zod.string(),
+      checked: zod.boolean().optional(),
+    }),
+  ),
+});
+
+export const UpsertShoppingListResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      name: zod.string(),
+      amount: zod.string(),
+      unit: zod.string(),
+      category: zod.string(),
+      checked: zod.boolean().optional(),
+    }),
+  ),
+  date: zod.date(),
+  id: zod.string().nullish(),
+});
+
+/**
  * @summary Toggle an item checked/unchecked
  */
 export const ToggleShoppingItemHeader = zod.object({
@@ -373,6 +458,26 @@ export const ToggleShoppingItemResponse = zod.object({
 });
 
 /**
+ * @summary Log a cooked meal and update streak (48-hour reset)
+ */
+export const UpdateStreakHeader = zod.object({
+  Authorization: zod
+    .string()
+    .optional()
+    .describe("Opaque session token — `Bearer <sid>`."),
+});
+
+export const UpdateStreakBody = zod.object({
+  recipeId: zod.string(),
+});
+
+export const UpdateStreakResponse = zod.object({
+  currentStreak: zod.number(),
+  longestStreak: zod.number(),
+  lastCookedAt: zod.date().nullish(),
+});
+
+/**
  * @summary Get current streak data
  */
 export const GetStreakHeader = zod.object({
@@ -383,26 +488,6 @@ export const GetStreakHeader = zod.object({
 });
 
 export const GetStreakResponse = zod.object({
-  currentStreak: zod.number(),
-  longestStreak: zod.number(),
-  lastCookedAt: zod.date().nullish(),
-});
-
-/**
- * @summary Log a cooked meal and update streak
- */
-export const LogCookedMealHeader = zod.object({
-  Authorization: zod
-    .string()
-    .optional()
-    .describe("Opaque session token — `Bearer <sid>`."),
-});
-
-export const LogCookedMealBody = zod.object({
-  recipeId: zod.string(),
-});
-
-export const LogCookedMealResponse = zod.object({
   currentStreak: zod.number(),
   longestStreak: zod.number(),
   lastCookedAt: zod.date().nullish(),

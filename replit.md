@@ -40,10 +40,10 @@ Design spec:
 All routes mounted at `/api`:
 
 **Auth (Replit Auth OIDC)**
-- `GET /auth/user` — current authenticated user
+- `GET /me` — current authenticated user (returns null if not logged in)
 - `GET /login` — browser OIDC login redirect
 - `GET /callback` — OIDC callback
-- `GET /logout` — session clear + OIDC logout
+- `GET /auth/logout` — session clear + OIDC logout
 - `POST /mobile-auth/token-exchange` — mobile auth code exchange
 - `POST /mobile-auth/logout` — mobile session deletion
 
@@ -52,18 +52,20 @@ All routes mounted at `/api`:
 - `PUT /profile` — upsert profile/onboarding data (protected)
 
 **Recipes**
-- `GET /recipes/daily?date=` — get daily recipes for a date (protected)
-- `GET /recipes/saved` — list saved recipes (protected)
-- `POST /recipes/saved` — save a recipe (protected)
-- `DELETE /recipes/saved/:id` — remove saved recipe (protected)
+- `GET /recipes/today?date=` — get today's recipes, empty array if not yet generated (protected)
+- `POST /recipes/regenerate` — regenerate a specific meal slot (protected, marks wasRegenerated)
+- `GET /saved-recipes` — list saved recipes (protected)
+- `POST /saved-recipes` — save a recipe (protected)
+- `DELETE /saved-recipes/:id` — remove saved recipe (protected)
 
 **Shopping**
 - `GET /shopping-list?date=` — get shopping list for a date (protected)
-- `POST /shopping-list/check` — toggle item checked/unchecked (protected)
+- `PUT /shopping-list` — create or replace shopping list for a date (protected)
+- `PATCH /shopping-list/check` — toggle item checked/unchecked (protected)
 
 **Streaks**
-- `GET /streaks` — get current streak data (protected)
-- `POST /streaks/log` — log a cooked meal, update streak (protected)
+- `GET /streak` — get current streak data (protected)
+- `PATCH /streak` — log a cooked meal, update streak with 48-hour reset logic (protected)
 
 ### Authentication
 

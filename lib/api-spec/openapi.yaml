@@ -35,10 +35,10 @@ paths:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
 
-  /auth/user:
+  /me:
     get:
       tags: [Auth]
-      operationId: getCurrentAuthUser
+      operationId: getCurrentUser
       summary: Get the currently authenticated user
       parameters:
         - $ref: '#/components/parameters/AuthorizationSessionHeader'
@@ -50,6 +50,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthUserEnvelope'
+
   /login:
     get:
       tags: [Auth]
@@ -89,7 +90,7 @@ paths:
       responses:
         '302':
           description: Redirect to returnTo path.
-  /logout:
+  /auth/logout:
     get:
       tags: [Auth]
       operationId: logoutBrowserSession
@@ -187,10 +188,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
 
-  /recipes/daily:
+  /recipes/today:
     get:
       tags: [recipes]
-      operationId: getDailyRecipes
+      operationId: getTodayRecipes
       summary: Get today's 3 recipes (breakfast, lunch, dinner)
       parameters:
         - $ref: '#/components/parameters/AuthorizationSessionHeader'
@@ -215,7 +216,35 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
 
-  /recipes/saved:
+  /recipes/regenerate:
+    post:
+      tags: [recipes]
+      operationId: regenerateRecipe
+      summary: Regenerate a specific meal's recipe
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegenerateRecipeRequest'
+      responses:
+        '200':
+          description: Regenerated recipe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyRecipeItem'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /saved-recipes:
     get:
       tags: [recipes]
       operationId: getSavedRecipes
@@ -263,7 +292,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
 
-  /recipes/saved/{id}:
+  /saved-recipes/{id}:
     delete:
       tags: [recipes]
       operationId: deleteSavedRecipe
@@ -317,9 +346,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+    put:
+      tags: [shopping]
+      operationId: upsertShoppingList
+      summary: Create or replace shopping list for a date
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertShoppingListRequest'
+      responses:
+        '200':
+          description: Shopping list saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShoppingListResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
 
   /shopping-list/check:
-    post:
+    patch:
       tags: [shopping]
       operationId: toggleShoppingItem
       summary: Toggle an item checked/unchecked
@@ -346,17 +401,23 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
 
-  /streaks:
-    get:
+  /streak:
+    patch:
       tags: [streaks]
-      operationId: getStreak
-      summary: Get current streak data
+      operationId: updateStreak
+      summary: Log a cooked meal and update streak (48-hour reset)
       parameters:
         - $ref: '#/components/parameters/AuthorizationSessionHeader'
         - $ref: '#/components/parameters/SessionCookie'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateStreakRequest'
       responses:
         '200':
-          description: Streak info
+          description: Updated streak
           content:
             application/json:
               schema:
@@ -367,24 +428,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
-
-  /streaks/log:
-    post:
+    get:
       tags: [streaks]
-      operationId: logCookedMeal
-      summary: Log a cooked meal and update streak
+      operationId: getStreak
+      summary: Get current streak data
       parameters:
         - $ref: '#/components/parameters/AuthorizationSessionHeader'
         - $ref: '#/components/parameters/SessionCookie'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/LogCookedMealRequest'
       responses:
         '200':
-          description: Updated streak
+          description: Streak info
           content:
             application/json:
               schema:
@@ -632,6 +685,17 @@ components:
           type: string
           format: date
 
+    RegenerateRecipeRequest:
+      type: object
+      required: [mealType]
+      properties:
+        mealType:
+          type: string
+          description: The meal slot to regenerate (breakfast, lunch, dinner)
+        date:
+          type: string
+          format: date
+
     SaveRecipeRequest:
       type: object
       required: [recipeJson]
@@ -689,6 +753,18 @@ components:
         id:
           type: [string, 'null']
 
+    UpsertShoppingListRequest:
+      type: object
+      required: [date, items]
+      properties:
+        date:
+          type: string
+          format: date
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ShoppingListItem'
+
     ToggleShoppingItemRequest:
       type: object
       required: [date, itemName, checked]
@@ -713,7 +789,7 @@ components:
           type: [string, 'null']
           format: date-time
 
-    LogCookedMealRequest:
+    UpdateStreakRequest:
       type: object
       required: [recipeId]
       properties:

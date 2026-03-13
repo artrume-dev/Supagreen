@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type GetDailyRecipesParams = {
+export interface RegenerateRecipeRequest {
+  /** The meal slot to regenerate (breakfast, lunch, dinner) */
+  mealType: string;
   date?: Date;
-};
+}

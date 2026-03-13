@@ -131,6 +131,12 @@ export interface DailyRecipesResponse {
   date: string;
 }
 
+export interface RegenerateRecipeRequest {
+  /** The meal slot to regenerate (breakfast, lunch, dinner) */
+  mealType: string;
+  date?: string;
+}
+
 export interface SaveRecipeRequest {
   recipeJson: RecipeObject;
 }
@@ -160,6 +166,11 @@ export interface ShoppingListResponse {
   id?: string | null;
 }
 
+export interface UpsertShoppingListRequest {
+  date: string;
+  items: ShoppingListItem[];
+}
+
 export interface ToggleShoppingItemRequest {
   date: string;
   itemName: string;
@@ -173,7 +184,7 @@ export interface StreakResponse {
   lastCookedAt?: string | null;
 }
 
-export interface LogCookedMealRequest {
+export interface UpdateStreakRequest {
   recipeId: string;
 }
 
@@ -192,7 +203,7 @@ export type HandleBrowserLoginCallbackParams = {
   iss?: string;
 };
 
-export type GetDailyRecipesParams = {
+export type GetTodayRecipesParams = {
   date?: string;
 };
 
