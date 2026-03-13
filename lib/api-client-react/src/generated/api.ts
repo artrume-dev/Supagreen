@@ -816,7 +816,7 @@ export const useUpdateProfile = <
 };
 
 /**
- * @summary Get today's 3 recipes (breakfast, lunch, dinner)
+ * @summary Get today's 4 recipes (breakfast, lunch, dinner, treat)
  */
 export const getGetTodayRecipesUrl = (params?: GetTodayRecipesParams) => {
   const normalizedParams = new URLSearchParams();
@@ -883,7 +883,7 @@ export type GetTodayRecipesQueryResult = NonNullable<
 export type GetTodayRecipesQueryError = ErrorType<ErrorEnvelope>;
 
 /**
- * @summary Get today's 3 recipes (breakfast, lunch, dinner)
+ * @summary Get today's 4 recipes (breakfast, lunch, dinner, treat)
  */
 
 export function useGetTodayRecipes<

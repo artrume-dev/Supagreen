@@ -40,6 +40,19 @@ const recipes = [
     img: "https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=400&q=80",
     goalTag: "💪 Muscle build",
   },
+  {
+    id: 4,
+    meal: "treat",
+    emoji: "🧁",
+    title: "Date & Cacao Energy Bites",
+    prepTime: 10,
+    healthScore: 8.5,
+    macros: { calories: 180, protein: 5, carbs: 24, fat: 8 },
+    highlight: "No refined sugar",
+    color: "from-pink-400 to-purple-600",
+    img: "https://images.unsplash.com/photo-1606312619070-d48b4c652a52?w=400&q=80",
+    goalTag: "🍫 Guilt-free treat",
+  },
 ];
 
 function MacroRing({ value, max, color, label }: { value: number; max: number; color: string; label: string }) {
@@ -144,7 +157,7 @@ export function HomeFeed() {
         <div className="mt-4 bg-[#1C2B1E] rounded-2xl p-4">
           <div className="flex items-center justify-between mb-3">
             <span className="text-white/70 text-sm font-medium">Today's plan</span>
-            <span className="text-[#22C55E] text-xs font-semibold">3 meals ready ✓</span>
+            <span className="text-[#22C55E] text-xs font-semibold">4 meals ready ✓</span>
           </div>
           <div className="flex gap-4">
             <div className="flex-1">

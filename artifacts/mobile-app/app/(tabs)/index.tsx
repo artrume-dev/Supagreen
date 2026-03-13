@@ -3,8 +3,9 @@ import type { ComponentProps } from "react";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Alert,
   Animated,
   Platform,
   Pressable,
@@ -22,6 +23,7 @@ import { useAuth } from "@/lib/auth";
 import {
   getGetTodayRecipesQueryOptions,
   getGetStreakQueryOptions,
+  useRegenerateRecipe,
   type DailyRecipeItem,
   type RecipeObject,
 } from "@workspace/api-client-react";
@@ -32,7 +34,14 @@ const mealIconMap: Record<string, IoniconsName> = {
   breakfast: "sunny-outline",
   lunch: "restaurant-outline",
   dinner: "moon-outline",
+  treat: "ice-cream-outline",
 };
+
+const MEAL_ORDER: Record<string, number> = { breakfast: 0, lunch: 1, dinner: 2, treat: 3 };
+
+function sortRecipesByMealOrder(recipes: DailyRecipeItem[]): DailyRecipeItem[] {
+  return [...recipes].sort((a, b) => (MEAL_ORDER[a.mealType] ?? 99) - (MEAL_ORDER[b.mealType] ?? 99));
+}
 
 function MacroRing({
   value,
@@ -93,12 +102,17 @@ function RecipeCard({
   recipe,
   mealType,
   id,
+  onRegenerate,
+  isRegenerating,
 }: {
   recipe: RecipeObject;
   mealType: string;
   id: string;
+  onRegenerate: () => void;
+  isRegenerating: boolean;
 }) {
   const iconName = mealIconMap[mealType.toLowerCase()] ?? "restaurant-outline";
+  const isTreat = mealType === "treat";
 
   return (
     <Pressable
@@ -107,6 +121,7 @@ function RecipeCard({
       }
       style={({ pressed }) => [
         styles.recipeCard,
+        isTreat && styles.treatCard,
         pressed && { transform: [{ scale: 0.97 }] },
       ]}
     >
@@ -127,7 +142,7 @@ function RecipeCard({
           style={styles.recipeImageOverlay}
         />
         <View style={styles.recipeTopRow}>
-          <View style={styles.mealBadge}>
+          <View style={[styles.mealBadge, isTreat && styles.treatBadge]}>
             <Ionicons
               name={iconName}
               size={12}
@@ -180,6 +195,16 @@ function RecipeCard({
         <View style={styles.calSection}>
           <Text style={styles.calValue}>{recipe.macros?.calories ?? 0}</Text>
           <Text style={styles.calUnit}>kcal</Text>
+          <Pressable
+            onPress={(e) => { e.stopPropagation(); onRegenerate(); }}
+            disabled={isRegenerating}
+            style={styles.swapButton}
+          >
+            <Feather name="refresh-cw" size={12} color={Colors.primary} />
+            <Text style={styles.swapButtonText}>
+              {isRegenerating ? "..." : "Swap"}
+            </Text>
+          </Pressable>
         </View>
       </View>
     </Pressable>
@@ -236,6 +261,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
   const { user } = useAuth();
+  const [regeneratingMeal, setRegeneratingMeal] = useState<string | null>(null);
 
   const today = new Date().toLocaleDateString("en-US", {
     weekday: "long",
@@ -257,7 +283,22 @@ export default function HomeScreen() {
     ...getGetStreakQueryOptions(),
   });
 
-  const recipes = recipesData?.recipes || [];
+  const { mutateAsync: regenerate } = useRegenerateRecipe();
+
+  const handleRegenerate = useCallback(async (mealType: string) => {
+    setRegeneratingMeal(mealType);
+    try {
+      await regenerate({ data: { mealType, date: todayDate } });
+      await refetchRecipes();
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "You may have reached your daily limit.";
+      Alert.alert("Could not swap recipe", message);
+    } finally {
+      setRegeneratingMeal(null);
+    }
+  }, [regenerate, todayDate, refetchRecipes]);
+
+  const recipes = sortRecipesByMealOrder(recipesData?.recipes || []);
 
   const totalCals = recipes.reduce(
     (s, r) => s + (r.recipe.macros?.calories || 0),
@@ -383,6 +424,8 @@ export default function HomeScreen() {
                 recipe={r.recipe}
                 mealType={r.mealType}
                 id={r.id}
+                onRegenerate={() => handleRegenerate(r.mealType)}
+                isRegenerating={regeneratingMeal === r.mealType}
               />
             ))}
           </ScrollView>
@@ -666,6 +709,27 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: "Inter_400Regular",
     color: Colors.textSecondary,
+  },
+  swapButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  swapButtonText: {
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.primary,
+  },
+  treatCard: {
+    borderWidth: 1,
+    borderColor: "rgba(236,72,153,0.3)",
+  },
+  treatBadge: {
+    backgroundColor: "rgba(236,72,153,0.4)",
   },
   emptyState: {
     alignItems: "center",

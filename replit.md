@@ -6,7 +6,7 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 
 ## NutriSnap
 
-An AI-powered personalised healthy recipe app targeting Gen Z / young Millennials (16–30). Generates 3 whole-food recipes per day (breakfast, lunch, dinner) based on dietary preferences, health goals, seasonal ingredient availability, and nearby stores.
+An AI-powered personalised healthy recipe app targeting Gen Z / young Millennials (16–30). Generates 4 whole-food recipes per day (breakfast, lunch, dinner, and a healthy treat/dessert) based on dietary preferences, health goals, seasonal ingredient availability, and nearby stores. The treat slot features naturally sweetened, whole-food desserts with no refined sugar or white flour.
 
 ### Design Mockup
 

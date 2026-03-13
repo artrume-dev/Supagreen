@@ -146,7 +146,7 @@ export interface DailyRecipesResponse {
 }
 
 export interface RegenerateRecipeRequest {
-  /** The meal slot to regenerate (breakfast, lunch, dinner) */
+  /** The meal slot to regenerate (breakfast, lunch, dinner, treat) */
   mealType: string;
   date?: string;
 }

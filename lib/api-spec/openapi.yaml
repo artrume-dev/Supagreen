@@ -192,7 +192,7 @@ paths:
     get:
       tags: [recipes]
       operationId: getTodayRecipes
-      summary: Get today's 3 recipes (breakfast, lunch, dinner)
+      summary: Get today's 4 recipes (breakfast, lunch, dinner, treat)
       parameters:
         - $ref: '#/components/parameters/AuthorizationSessionHeader'
         - $ref: '#/components/parameters/SessionCookie'
@@ -752,7 +752,7 @@ components:
       properties:
         mealType:
           type: string
-          description: The meal slot to regenerate (breakfast, lunch, dinner)
+          description: The meal slot to regenerate (breakfast, lunch, dinner, treat)
         date:
           type: string
           format: date

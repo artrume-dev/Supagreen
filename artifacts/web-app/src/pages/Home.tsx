@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { useGetTodayRecipes, useGetStreak, useGetCurrentUser, useRegenerateRecipe } from "@workspace/api-client-react";
 import { getTodayStr } from "@/lib/utils";
-import { Flame, Clock, Sparkles, RefreshCw, ChefHat } from "lucide-react";
+import { Flame, Clock, Sparkles, RefreshCw, ChefHat, CakeSlice } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import type { DailyRecipeItem } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
@@ -31,12 +31,19 @@ function MacroRing({ value, max, color, label }: { value: number; max: number; c
   );
 }
 
+const MEAL_ORDER: Record<string, number> = { breakfast: 0, lunch: 1, dinner: 2, treat: 3 };
+
+function sortRecipesByMealOrder(recipes: DailyRecipeItem[]): DailyRecipeItem[] {
+  return [...recipes].sort((a, b) => (MEAL_ORDER[a.mealType] ?? 99) - (MEAL_ORDER[b.mealType] ?? 99));
+}
+
 function RecipeCard({ item, onRegenerate, isRegenerating }: { item: DailyRecipeItem, onRegenerate: () => void, isRegenerating: boolean }) {
   const recipe = item.recipe;
-  const fallbackImg = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&q=80"; // fallback healthy food
+  const fallbackImg = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&q=80";
+  const isTreat = item.mealType === "treat";
 
   return (
-    <div className="relative rounded-[32px] overflow-hidden flex-shrink-0 w-[280px] sm:w-[300px] shadow-2xl shadow-black/50 border border-white/5 bg-card group">
+    <div className={`relative rounded-[32px] overflow-hidden flex-shrink-0 w-[280px] sm:w-[300px] shadow-2xl shadow-black/50 border bg-card group ${isTreat ? "border-pink-500/30" : "border-white/5"}`}>
       <Link href={`/app/recipe/${item.id}`} className="block relative h-48 overflow-hidden cursor-pointer">
         <img 
           src={recipe.imageUrl || fallbackImg} 
@@ -46,7 +53,8 @@ function RecipeCard({ item, onRegenerate, isRegenerating }: { item: DailyRecipeI
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent opacity-90" />
         
         <div className="absolute top-3 left-3 flex gap-2">
-          <span className="bg-background/40 backdrop-blur-md text-white text-xs font-bold px-3 py-1.5 rounded-full capitalize border border-white/10 shadow-lg">
+          <span className={`backdrop-blur-md text-white text-xs font-bold px-3 py-1.5 rounded-full capitalize border shadow-lg flex items-center gap-1.5 ${isTreat ? "bg-pink-500/40 border-pink-400/30" : "bg-background/40 border-white/10"}`}>
+            {isTreat && <CakeSlice className="w-3 h-3" />}
             {item.mealType}
           </span>
         </div>
@@ -104,7 +112,7 @@ export function Home() {
 
   const displayDate = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
   
-  const recipesList = recipesData?.recipes || [];
+  const recipesList = sortRecipesByMealOrder(recipesData?.recipes || []);
   const totalCals = recipesList.reduce((s, r) => s + (r.recipe.macros?.calories || 0), 0);
   const totalProtein = recipesList.reduce((s, r) => s + (r.recipe.macros?.protein || 0), 0);
 
@@ -145,7 +153,7 @@ export function Home() {
           <div className="flex items-center justify-between mb-4">
             <span className="text-white font-bold font-display">Today's Nutrition</span>
             <span className="bg-primary/20 text-primary text-xs font-bold px-2 py-1 rounded-md flex items-center gap-1">
-              <ChefHat className="w-3 h-3" /> 3 Meals Set
+              <ChefHat className="w-3 h-3" /> {recipesList.length} Meals Set
             </span>
           </div>
           <div className="flex gap-6 items-center">
@@ -179,7 +187,7 @@ export function Home() {
 
       {recipesLoading ? (
         <div className="px-6 flex gap-4 overflow-x-auto pb-8 pt-2 scrollbar-hide">
-          {[1, 2, 3].map(i => (
+          {[1, 2, 3, 4].map(i => (
             <div key={i} className="w-[280px] h-[320px] bg-card/50 animate-pulse rounded-[32px] flex-shrink-0 border border-white/5" />
           ))}
         </div>

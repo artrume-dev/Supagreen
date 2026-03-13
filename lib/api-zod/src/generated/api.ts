@@ -167,7 +167,7 @@ export const UpdateProfileResponse = zod.object({
 });
 
 /**
- * @summary Get today's 3 recipes (breakfast, lunch, dinner)
+ * @summary Get today's 4 recipes (breakfast, lunch, dinner, treat)
  */
 export const GetTodayRecipesQueryParams = zod.object({
   date: zod.date().optional(),
@@ -243,7 +243,7 @@ export const RegenerateRecipeHeader = zod.object({
 export const RegenerateRecipeBody = zod.object({
   mealType: zod
     .string()
-    .describe("The meal slot to regenerate (breakfast, lunch, dinner)"),
+    .describe("The meal slot to regenerate (breakfast, lunch, dinner, treat)"),
   date: zod.date().optional(),
 });
 

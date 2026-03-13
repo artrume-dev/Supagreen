@@ -26,7 +26,7 @@ const RecipeMacrosSchema = z.object({
 });
 
 const GeneratedRecipeSchema = z.object({
-  meal: z.enum(["breakfast", "lunch", "dinner"]),
+  meal: z.enum(["breakfast", "lunch", "dinner", "treat"]),
   title: z.string(),
   emoji: z.string(),
   prepTime: z.number(),
@@ -78,7 +78,7 @@ function buildSystemPrompt(profile: UserProfileInput): string {
   const country = profile.country ?? "Unknown";
   const calories = profile.caloriesTarget ?? 2000;
 
-  return `You are a certified nutritionist and chef. Generate exactly 3 complete recipes (breakfast, lunch, dinner) for a user with the following profile:
+  return `You are a certified nutritionist and chef. Generate exactly 4 complete recipes (breakfast, lunch, dinner, and treat) for a user with the following profile:
 - Diet: ${dietType}
 - Allergies: ${allergies}
 - Goal: ${healthGoal}
@@ -93,11 +93,12 @@ STRICT RULES:
 3. Provide macros (protein g, carbs g, fat g, calories) per serving.
 4. Prep time must match skill level.
 5. Each recipe must serve the goal: e.g. high-protein for muscle building, anti-inflammatory foods for inflammation goals.
-6. Format response as valid JSON matching this schema:
+6. The "treat" recipe MUST be a healthy dessert. It should use only whole foods and natural sweeteners (fruit, dates, honey, maple syrup, coconut sugar). Absolutely NO refined sugar, white flour, or artificial sweeteners. Examples: fruit-based desserts, date energy balls, chia puddings, banana nice cream, baked fruit with nuts, raw cacao treats. Keep treat calories reasonable (under 300 kcal per serving).
+7. Format response as valid JSON matching this schema:
 {
   "recipes": [
     {
-      "meal": "breakfast" | "lunch" | "dinner",
+      "meal": "breakfast" | "lunch" | "dinner" | "treat",
       "title": "string",
       "emoji": "string",
       "prepTime": number,
@@ -123,9 +124,14 @@ export async function generateRecipes(
 ): Promise<GeneratedRecipe[]> {
   const systemPrompt = buildSystemPrompt(profile);
 
-  const userContent = mealFilter
-    ? `Generate exactly 1 recipe for ${mealFilter} only. Return the same JSON format with a "recipes" array containing just 1 recipe.`
-    : "Generate today's 3 recipes (breakfast, lunch, dinner).";
+  let userContent: string;
+  if (mealFilter === "treat") {
+    userContent = `Generate exactly 1 healthy dessert/treat recipe only. It must use "treat" as the meal value. Use only whole foods and natural sweeteners (fruit, dates, honey, maple syrup). No refined sugar or white flour. Return the same JSON format with a "recipes" array containing just 1 recipe.`;
+  } else if (mealFilter) {
+    userContent = `Generate exactly 1 recipe for ${mealFilter} only. Return the same JSON format with a "recipes" array containing just 1 recipe.`;
+  } else {
+    userContent = "Generate today's 4 recipes (breakfast, lunch, dinner, and treat).";
+  }
 
   const message = await anthropic.messages.create({
     model: "claude-sonnet-4-20250514",
@@ -164,7 +170,7 @@ export async function generateRecipes(
     );
   }
 
-  const expectedCount = mealFilter ? 1 : 3;
+  const expectedCount = mealFilter ? 1 : 4;
   if (parsed.data.recipes.length < expectedCount) {
     throw new Error(
       `Expected ${expectedCount} recipes but got ${parsed.data.recipes.length}`,
