@@ -9,7 +9,7 @@ import {
   GetNearbyStoresQueryParams,
   GetNearbyStoresResponse,
 } from "@workspace/api-zod";
-import { db, shoppingListsTable } from "@workspace/db";
+import { db, shoppingListsTable, userProfilesTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { coerceDateFields } from "../lib/parseDate";
 import { findNearbyStores } from "../services/storeFinder";
@@ -172,13 +172,35 @@ router.patch("/shopping-list/check", async (req: Request, res: Response) => {
 });
 
 router.get("/shopping-list/stores", async (req: Request, res: Response) => {
-  const parsed = GetNearbyStoresQueryParams.safeParse(req.query);
-  if (!parsed.success) {
-    res.status(400).json({ error: "lat and lng query parameters are required" });
-    return;
-  }
+  let lat: number;
+  let lng: number;
+  let radius: number = 3000;
 
-  const { lat, lng, radius } = parsed.data;
+  if (req.query.lat && req.query.lng) {
+    const parsed = GetNearbyStoresQueryParams.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid lat/lng query parameters" });
+      return;
+    }
+    lat = parsed.data.lat;
+    lng = parsed.data.lng;
+    radius = parsed.data.radius;
+  } else {
+    const [profile] = await db
+      .select()
+      .from(userProfilesTable)
+      .where(eq(userProfilesTable.userId, req.user!.id));
+
+    if (!profile?.lat || !profile?.lng) {
+      res.status(400).json({
+        error:
+          "lat and lng query parameters are required, or set your location in your profile",
+      });
+      return;
+    }
+    lat = profile.lat;
+    lng = profile.lng;
+  }
 
   let stores;
   try {

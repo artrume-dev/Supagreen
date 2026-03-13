@@ -225,8 +225,11 @@ router.get("/recipes/today", async (req: Request, res: Response) => {
 
     try {
       await autoPopulateShoppingList(userId, date, false);
-    } catch {
-      // Non-critical: shopping list auto-populate failed but recipes are still valid
+    } catch (err) {
+      console.warn(
+        "Shopping list auto-populate failed after recipe generation:",
+        err instanceof Error ? err.message : err,
+      );
     }
   }
 
@@ -325,6 +328,13 @@ router.post("/recipes/regenerate", async (req: Request, res: Response) => {
     return;
   }
 
+  if (newRecipe.meal !== mealType) {
+    console.warn(
+      `Claude returned meal type "${newRecipe.meal}" but "${mealType}" was requested; overriding.`,
+    );
+    (newRecipe as { meal: string }).meal = mealType;
+  }
+
   const [updated] = await db
     .update(dailyRecipesTable)
     .set({
@@ -338,8 +348,11 @@ router.post("/recipes/regenerate", async (req: Request, res: Response) => {
 
   try {
     await autoPopulateShoppingList(userId, date, true);
-  } catch {
-    // Non-critical
+  } catch (err) {
+    console.warn(
+      "Shopping list auto-populate failed after regeneration:",
+      err instanceof Error ? err.message : err,
+    );
   }
 
   res.json(
