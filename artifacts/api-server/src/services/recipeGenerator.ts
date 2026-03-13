@@ -1,4 +1,5 @@
 import { anthropic } from "@workspace/integrations-anthropic-ai";
+import { z } from "zod/v4";
 
 interface UserProfileInput {
   dietType: string | null;
@@ -10,34 +11,40 @@ interface UserProfileInput {
   country: string | null;
 }
 
-interface RecipeIngredient {
-  name: string;
-  amount: string;
-  unit: string;
-  isKeyIngredient: boolean;
-}
+const RecipeIngredientSchema = z.object({
+  name: z.string(),
+  amount: z.string(),
+  unit: z.string(),
+  isKeyIngredient: z.boolean(),
+});
 
-interface RecipeMacros {
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-}
+const RecipeMacrosSchema = z.object({
+  calories: z.number(),
+  protein: z.number(),
+  carbs: z.number(),
+  fat: z.number(),
+});
 
-export interface GeneratedRecipe {
-  meal: string;
-  title: string;
-  emoji: string;
-  prepTime: number;
-  servings: number;
-  healthScore: number;
-  goalAlignment: string;
-  macros: RecipeMacros;
-  ingredients: RecipeIngredient[];
-  steps: string[];
-  healthBenefits: string[];
-  swapSuggestion: string;
-}
+const GeneratedRecipeSchema = z.object({
+  meal: z.enum(["breakfast", "lunch", "dinner"]),
+  title: z.string(),
+  emoji: z.string(),
+  prepTime: z.number(),
+  servings: z.number(),
+  healthScore: z.number().min(1).max(10),
+  goalAlignment: z.string(),
+  macros: RecipeMacrosSchema,
+  ingredients: z.array(RecipeIngredientSchema),
+  steps: z.array(z.string()),
+  healthBenefits: z.array(z.string()),
+  swapSuggestion: z.string(),
+});
+
+export type GeneratedRecipe = z.infer<typeof GeneratedRecipeSchema>;
+
+const RecipesResponseSchema = z.object({
+  recipes: z.array(GeneratedRecipeSchema),
+});
 
 function getCurrentSeason(country: string | null): string {
   const month = new Date().getMonth();
@@ -59,27 +66,30 @@ function getCurrentSeason(country: string | null): string {
   return isSouthern ? "summer" : "winter";
 }
 
-function buildSystemPrompt(
-  profile: UserProfileInput,
-  mealFilter?: string,
-): string {
+function buildSystemPrompt(profile: UserProfileInput): string {
   const season = getCurrentSeason(profile.country);
-  const mealInstruction = mealFilter
-    ? `Generate exactly 1 recipe for ${mealFilter} only.`
-    : "Generate exactly 3 complete recipes (breakfast, lunch, dinner).";
+  const dietType = profile.dietType ?? "Omnivore";
+  const allergies = profile.allergies?.length
+    ? profile.allergies.join(", ")
+    : "None";
+  const healthGoal = profile.healthGoal ?? "General wellness";
+  const skillLevel = profile.skillLevel ?? "Intermediate";
+  const city = profile.city ?? "Unknown";
+  const country = profile.country ?? "Unknown";
+  const calories = profile.caloriesTarget ?? 2000;
 
-  return `You are a certified nutritionist and chef. ${mealInstruction} For a user with the following profile:
-- Diet: ${profile.dietType ?? "Omnivore"}
-- Allergies: ${profile.allergies?.length ? profile.allergies.join(", ") : "None"}
-- Goal: ${profile.healthGoal ?? "General wellness"}
-- Skill level: ${profile.skillLevel ?? "Intermediate"}
-- Location: ${profile.city ?? "Unknown"}, ${profile.country ?? "Unknown"}
+  return `You are a certified nutritionist and chef. Generate exactly 3 complete recipes (breakfast, lunch, dinner) for a user with the following profile:
+- Diet: ${dietType}
+- Allergies: ${allergies}
+- Goal: ${healthGoal}
+- Skill level: ${skillLevel}
+- Location: ${city}, ${country}
 - Season: ${season}
-- Daily calorie target: ${profile.caloriesTarget ?? 2000} kcal
+- Daily calorie target: ${calories} kcal
 
 STRICT RULES:
 1. Every single ingredient must be a 100% whole, unprocessed food. No protein powders, artificial sweeteners, processed snacks, refined sugar, white flour, seed oils (canola, soybean, sunflower), or ultra-processed ingredients.
-2. Ingredients must be SEASONALLY AVAILABLE in ${profile.country ?? "the user's region"} during ${season}.
+2. Ingredients must be SEASONALLY AVAILABLE in ${country} during ${season}.
 3. Provide macros (protein g, carbs g, fat g, calories) per serving.
 4. Prep time must match skill level.
 5. Each recipe must serve the goal: e.g. high-protein for muscle building, anti-inflammatory foods for inflammation goals.
@@ -104,52 +114,26 @@ STRICT RULES:
     }
   ]
 }
-Return ONLY valid JSON. No markdown, no preamble, no code fences.`;
-}
-
-function validateRecipe(recipe: unknown): recipe is GeneratedRecipe {
-  if (!recipe || typeof recipe !== "object") return false;
-  const r = recipe as Record<string, unknown>;
-  return (
-    typeof r.meal === "string" &&
-    typeof r.title === "string" &&
-    typeof r.emoji === "string" &&
-    typeof r.prepTime === "number" &&
-    typeof r.servings === "number" &&
-    typeof r.healthScore === "number" &&
-    typeof r.goalAlignment === "string" &&
-    r.macros != null &&
-    typeof r.macros === "object" &&
-    Array.isArray(r.ingredients) &&
-    r.ingredients.every(
-      (i: unknown) =>
-        i != null &&
-        typeof i === "object" &&
-        typeof (i as Record<string, unknown>).name === "string" &&
-        typeof (i as Record<string, unknown>).amount === "string" &&
-        typeof (i as Record<string, unknown>).unit === "string",
-    ) &&
-    Array.isArray(r.steps) &&
-    Array.isArray(r.healthBenefits) &&
-    typeof r.swapSuggestion === "string"
-  );
+Return ONLY valid JSON. No markdown, no preamble.`;
 }
 
 export async function generateRecipes(
   profile: UserProfileInput,
   mealFilter?: string,
 ): Promise<GeneratedRecipe[]> {
-  const systemPrompt = buildSystemPrompt(profile, mealFilter);
+  const systemPrompt = buildSystemPrompt(profile);
+
+  const userContent = mealFilter
+    ? `Generate exactly 1 recipe for ${mealFilter} only. Return the same JSON format with a "recipes" array containing just 1 recipe.`
+    : "Generate today's 3 recipes (breakfast, lunch, dinner).";
 
   const message = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
+    model: "claude-sonnet-4-20250514",
     max_tokens: 8192,
     messages: [
       {
         role: "user",
-        content: mealFilter
-          ? `Generate a new ${mealFilter} recipe following the rules above.`
-          : "Generate today's 3 recipes (breakfast, lunch, dinner) following the rules above.",
+        content: userContent,
       },
     ],
     system: systemPrompt,
@@ -162,36 +146,30 @@ export async function generateRecipes(
     throw new Error("No text response from Claude");
   }
 
-  let parsed: { recipes: unknown[] };
+  let rawJson: unknown;
   try {
-    parsed = JSON.parse(textBlock.text);
+    rawJson = JSON.parse(textBlock.text);
   } catch {
     const jsonMatch = textBlock.text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       throw new Error("Claude response did not contain valid JSON");
     }
-    parsed = JSON.parse(jsonMatch[0]);
+    rawJson = JSON.parse(jsonMatch[0]);
   }
 
-  if (!parsed.recipes || !Array.isArray(parsed.recipes)) {
-    throw new Error("Claude response missing recipes array");
-  }
-
-  const expectedCount = mealFilter ? 1 : 3;
-  if (parsed.recipes.length < expectedCount) {
+  const parsed = RecipesResponseSchema.safeParse(rawJson);
+  if (!parsed.success) {
     throw new Error(
-      `Expected ${expectedCount} recipes but got ${parsed.recipes.length}`,
+      `Claude returned invalid recipe structure: ${parsed.error.message}`,
     );
   }
 
-  const validated = parsed.recipes.slice(0, expectedCount);
-  for (const recipe of validated) {
-    if (!validateRecipe(recipe)) {
-      throw new Error(
-        `Claude returned a recipe with invalid structure: ${JSON.stringify(recipe).slice(0, 200)}`,
-      );
-    }
+  const expectedCount = mealFilter ? 1 : 3;
+  if (parsed.data.recipes.length < expectedCount) {
+    throw new Error(
+      `Expected ${expectedCount} recipes but got ${parsed.data.recipes.length}`,
+    );
   }
 
-  return validated as GeneratedRecipe[];
+  return parsed.data.recipes.slice(0, expectedCount);
 }

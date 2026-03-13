@@ -16,7 +16,8 @@
     "drizzle-orm": "catalog:",
     "express": "^5",
     "openid-client": "^6.8.2",
-    "@workspace/integrations-anthropic-ai": "workspace:*"
+    "@workspace/integrations-anthropic-ai": "workspace:*",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",
