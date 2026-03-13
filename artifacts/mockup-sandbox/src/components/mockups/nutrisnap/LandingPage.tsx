@@ -215,7 +215,6 @@ export function LandingPage() {
           </button>
         </div>
       </nav>
-
       {/* ─── HERO ─── */}
       <section className="relative overflow-hidden">
         {/* Background glow */}
@@ -228,7 +227,7 @@ export function LandingPage() {
             <div className="flex-1 text-center lg:text-left">
               <div className="inline-flex items-center gap-2 bg-[#22C55E]/10 border border-[#22C55E]/20 text-[#22C55E] text-xs font-semibold px-4 py-2 rounded-full mb-6">
                 <span>✨</span>
-                <span>Powered by Claude AI · 100% whole foods</span>
+                <span>Powered by AI · 100% whole foods</span>
               </div>
 
               <h1 className="text-5xl lg:text-6xl font-black leading-tight mb-6">
@@ -345,7 +344,6 @@ export function LandingPage() {
           </div>
         </div>
       </section>
-
       {/* ─── LOGO BAR ─── */}
       <div className="border-y border-white/5 py-6">
         <div className="max-w-6xl mx-auto px-6">
@@ -361,7 +359,6 @@ export function LandingPage() {
           </div>
         </div>
       </div>
-
       {/* ─── FEATURES ─── */}
       <section className="py-24">
         <div className="max-w-6xl mx-auto px-6">
@@ -387,7 +384,6 @@ export function LandingPage() {
           </div>
         </div>
       </section>
-
       {/* ─── HOW IT WORKS ─── */}
       <section className="py-24 bg-[#1C2B1E]/30">
         <div className="max-w-6xl mx-auto px-6">
@@ -440,7 +436,6 @@ export function LandingPage() {
           </div>
         </div>
       </section>
-
       {/* ─── SOCIAL PROOF ─── */}
       <section className="py-24">
         <div className="max-w-6xl mx-auto px-6">
@@ -493,7 +488,6 @@ export function LandingPage() {
           </div>
         </div>
       </section>
-
       {/* ─── PRICING ─── */}
       <section className="py-24 bg-[#1C2B1E]/30">
         <div className="max-w-5xl mx-auto px-6">
@@ -571,7 +565,6 @@ export function LandingPage() {
           </div>
         </div>
       </section>
-
       {/* ─── FAQ ─── */}
       <section className="py-24">
         <div className="max-w-3xl mx-auto px-6">
@@ -601,7 +594,6 @@ export function LandingPage() {
           </div>
         </div>
       </section>
-
       {/* ─── FINAL CTA ─── */}
       <section className="py-24 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-[#22C55E]/10 via-transparent to-[#F97316]/5" />
@@ -628,7 +620,6 @@ export function LandingPage() {
           <p className="text-white/30 text-xs mt-5">No credit card required · Cancel anytime · GDPR compliant</p>
         </div>
       </section>
-
       {/* ─── FOOTER ─── */}
       <footer className="border-t border-white/5 py-12">
         <div className="max-w-6xl mx-auto px-6">
