@@ -6,9 +6,10 @@ import {
   useFonts,
 } from "@expo-google-fonts/inter";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { configureFetch, getGetProfileQueryKey, getGetProfileQueryOptions } from "@workspace/api-client-react";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -16,28 +17,19 @@ import { StatusBar } from "expo-status-bar";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthContext, useAuth, useAuthProvider } from "@/lib/auth";
-import { apiGet } from "@/lib/api";
 import Colors from "@/constants/colors";
 
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
-interface ProfileResponse {
-  profile: {
-    dietType: string | null;
-    healthGoal: string | null;
-  } | null;
-}
-
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { user, isLoading: authLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
-  const { data: profileData, isLoading: profileLoading } = useQuery<ProfileResponse>({
-    queryKey: ["profile"],
-    queryFn: () => apiGet("/api/profile"),
+  const { data: profileData, isLoading: profileLoading } = useQuery({
+    ...getGetProfileQueryOptions(),
     enabled: !!user,
   });
 
@@ -108,6 +100,20 @@ export default function RootLayout() {
   });
 
   const auth = useAuthProvider();
+  const tokenRef = useRef(auth.token);
+  tokenRef.current = auth.token;
+
+  useEffect(() => {
+    const domain = process.env.EXPO_PUBLIC_DOMAIN;
+    configureFetch({
+      baseUrl: domain ? `https://${domain}` : "",
+      useCredentials: false,
+      getHeaders: (): Record<string, string> => {
+        const t = tokenRef.current;
+        return t ? { Authorization: `Bearer ${t}` } : {};
+      },
+    });
+  }, []);
 
   useEffect(() => {
     if (fontsLoaded || fontError) {

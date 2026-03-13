@@ -6,6 +6,24 @@ export type ErrorType<T = unknown> = ApiError<T>;
 
 export type BodyType<T> = T;
 
+interface FetchConfig {
+  baseUrl: string;
+  getHeaders: () => Record<string, string>;
+  useCredentials: boolean;
+}
+
+const _config: FetchConfig = {
+  baseUrl: "",
+  getHeaders: () => ({}),
+  useCredentials: true,
+};
+
+export function configureFetch(opts: Partial<FetchConfig>): void {
+  if (opts.baseUrl !== undefined) _config.baseUrl = opts.baseUrl;
+  if (opts.getHeaders !== undefined) _config.getHeaders = opts.getHeaders;
+  if (opts.useCredentials !== undefined) _config.useCredentials = opts.useCredentials;
+}
+
 const NO_BODY_STATUS = new Set([204, 205, 304]);
 const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 
@@ -283,7 +301,12 @@ export async function customFetch<T = unknown>(
     throw new TypeError(`customFetch: ${method} requests cannot have a body.`);
   }
 
-  const headers = mergeHeaders(isRequest(input) ? input.headers : undefined, headersInit);
+  const configHeaders = _config.getHeaders();
+  const headers = mergeHeaders(
+    isRequest(input) ? input.headers : undefined,
+    configHeaders,
+    headersInit,
+  );
 
   if (
     typeof init.body === "string" &&
@@ -297,9 +320,19 @@ export async function customFetch<T = unknown>(
     headers.set("accept", DEFAULT_JSON_ACCEPT);
   }
 
-  const requestInfo = { method, url: resolveUrl(input) };
+  let resolvedUrl = resolveUrl(input);
+  if (_config.baseUrl && resolvedUrl.startsWith("/")) {
+    resolvedUrl = `${_config.baseUrl}${resolvedUrl}`;
+  }
 
-  const response = await fetch(input, { ...init, method, headers, credentials: "include" });
+  const requestInfo = { method, url: resolvedUrl };
+
+  const fetchInit: RequestInit = { ...init, method, headers };
+  if (_config.useCredentials) {
+    fetchInit.credentials = "include";
+  }
+
+  const response = await fetch(resolvedUrl, fetchInit);
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);

@@ -18,32 +18,13 @@ import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 
 import Colors from "@/constants/colors";
-import { apiGet, apiPatch } from "@/lib/api";
-
-interface ShoppingItem {
-  name: string;
-  amount: string;
-  unit: string;
-  category: string;
-  checked: boolean;
-}
-
-interface ShoppingListData {
-  id: number | null;
-  date: string;
-  items: ShoppingItem[];
-}
-
-interface StoreData {
-  id: string;
-  name: string;
-  address: string;
-  lat: number;
-  lng: number;
-  rating: number | null;
-  openNow: boolean | null;
-  distance: number | null;
-}
+import {
+  getGetShoppingListQueryOptions,
+  useToggleShoppingItem,
+  getGetShoppingListQueryKey,
+  customFetch,
+  type NearbyStoresResponse,
+} from "@workspace/api-client-react";
 
 type IoniconsName = ComponentProps<typeof Ionicons>["name"];
 
@@ -62,21 +43,23 @@ export default function ShoppingScreen() {
   const queryClient = useQueryClient();
   const todayDate = new Date().toISOString().split("T")[0];
 
-  const { data: shoppingData, isLoading } = useQuery<ShoppingListData>({
-    queryKey: ["shoppingList", todayDate],
-    queryFn: () => apiGet(`/api/shopping-list?date=${todayDate}`),
+  const { data: shoppingData, isLoading } = useQuery({
+    ...getGetShoppingListQueryOptions({ date: todayDate }),
   });
 
-  const { data: storesData } = useQuery<{ stores: StoreData[] }>({
+  const { data: storesData } = useQuery({
     queryKey: ["nearbyStores"],
-    queryFn: () => apiGet("/api/shopping-list/stores"),
+    queryFn: () =>
+      customFetch<NearbyStoresResponse>("/api/shopping-list/stores", {
+        method: "GET",
+      }),
   });
 
-  const toggleMutation = useMutation({
-    mutationFn: (body: { date: string; itemName: string; checked: boolean }) =>
-      apiPatch("/api/shopping-list/check", body),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["shoppingList"] });
+  const toggleMutation = useToggleShoppingItem({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetShoppingListQueryKey() });
+      },
     },
   });
 
@@ -90,18 +73,20 @@ export default function ShoppingScreen() {
       acc[cat].push(item);
       return acc;
     },
-    {} as Record<string, ShoppingItem[]>
+    {} as Record<string, typeof items>
   );
 
   const totalItems = items.length;
   const checkedCount = items.filter((i) => i.checked).length;
 
-  const handleToggle = async (item: ShoppingItem) => {
+  const handleToggle = async (itemName: string, currentChecked: boolean) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     toggleMutation.mutate({
-      date: todayDate,
-      itemName: item.name,
-      checked: !item.checked,
+      data: {
+        date: todayDate,
+        itemName,
+        checked: !currentChecked,
+      },
     });
   };
 
@@ -202,7 +187,7 @@ export default function ShoppingScreen() {
                   {catItems.map((item, idx) => (
                     <Pressable
                       key={`${category}-${idx}`}
-                      onPress={() => handleToggle(item)}
+                      onPress={() => handleToggle(item.name, !!item.checked)}
                       style={[
                         styles.itemRow,
                         item.checked && styles.itemRowChecked,
@@ -245,8 +230,8 @@ export default function ShoppingScreen() {
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={styles.storesScrollContent}
                 >
-                  {stores.slice(0, 5).map((store) => (
-                    <View key={store.id} style={styles.storeCard}>
+                  {stores.slice(0, 5).map((store, idx) => (
+                    <View key={`${store.name}-${idx}`} style={styles.storeCard}>
                       <View style={styles.storeIconContainer}>
                         <Ionicons name="storefront" size={20} color={Colors.primary} />
                       </View>

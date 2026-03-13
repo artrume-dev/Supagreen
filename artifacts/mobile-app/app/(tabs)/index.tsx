@@ -19,51 +19,12 @@ import Svg, { Circle, Text as SvgText } from "react-native-svg";
 
 import Colors from "@/constants/colors";
 import { useAuth } from "@/lib/auth";
-import { apiGet } from "@/lib/api";
-
-interface RecipeMacros {
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-}
-
-interface Recipe {
-  title: string;
-  prepTime: number;
-  cookTime?: number;
-  servings?: number;
-  healthScore: number;
-  macros: RecipeMacros;
-  calories?: number;
-  protein?: number;
-  carbs?: number;
-  fat?: number;
-  imageUrl?: string | null;
-  ingredients: { name: string; amount: string; unit: string; isKeyIngredient?: boolean }[];
-  steps: string[];
-  goalAlignment?: string;
-  healthBenefits?: string[];
-  swapSuggestion?: string;
-  tags?: string[];
-  emoji?: string;
-  description?: string;
-  meal?: string;
-}
-
-interface DailyRecipe {
-  id: number;
-  mealType: string;
-  recipe: Recipe;
-  date: string;
-  wasRegenerated: boolean;
-}
-
-interface StreakData {
-  currentStreak: number;
-  longestStreak: number;
-  lastCookedAt: string | null;
-}
+import {
+  getGetTodayRecipesQueryOptions,
+  getGetStreakQueryOptions,
+  type DailyRecipeItem,
+  type RecipeObject,
+} from "@workspace/api-client-react";
 
 type IoniconsName = ComponentProps<typeof Ionicons>["name"];
 
@@ -133,9 +94,9 @@ function RecipeCard({
   mealType,
   id,
 }: {
-  recipe: Recipe;
+  recipe: RecipeObject;
   mealType: string;
-  id: number;
+  id: string;
 }) {
   const iconName = mealIconMap[mealType.toLowerCase()] ?? "restaurant-outline";
 
@@ -198,26 +159,26 @@ function RecipeCard({
       <View style={styles.macroRow}>
         <View style={styles.macroRings}>
           <MacroRing
-            value={recipe.macros.protein}
+            value={recipe.macros?.protein ?? 0}
             max={60}
             color={Colors.primary}
             label="Protein"
           />
           <MacroRing
-            value={recipe.macros.carbs}
+            value={recipe.macros?.carbs ?? 0}
             max={100}
             color={Colors.accent}
             label="Carbs"
           />
           <MacroRing
-            value={recipe.macros.fat}
+            value={recipe.macros?.fat ?? 0}
             max={60}
             color={Colors.blue}
             label="Fat"
           />
         </View>
         <View style={styles.calSection}>
-          <Text style={styles.calValue}>{recipe.macros.calories}</Text>
+          <Text style={styles.calValue}>{recipe.macros?.calories ?? 0}</Text>
           <Text style={styles.calUnit}>kcal</Text>
         </View>
       </View>
@@ -288,14 +249,12 @@ export default function HomeScreen() {
     data: recipesData,
     isLoading: recipesLoading,
     refetch: refetchRecipes,
-  } = useQuery<{ recipes: DailyRecipe[] }>({
-    queryKey: ["todayRecipes", todayDate],
-    queryFn: () => apiGet(`/api/recipes/today?date=${todayDate}`),
+  } = useQuery({
+    ...getGetTodayRecipesQueryOptions({ date: todayDate }),
   });
 
-  const { data: streakData } = useQuery<StreakData>({
-    queryKey: ["streak"],
-    queryFn: () => apiGet("/api/streak"),
+  const { data: streakData } = useQuery({
+    ...getGetStreakQueryOptions(),
   });
 
   const recipes = recipesData?.recipes || [];

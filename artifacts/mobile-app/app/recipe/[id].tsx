@@ -17,52 +17,13 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 
 import Colors from "@/constants/colors";
-import { apiGet, apiPost, apiPut } from "@/lib/api";
-
-interface RecipeMacros {
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-}
-
-interface Ingredient {
-  name: string;
-  amount: string;
-  unit: string;
-  isKeyIngredient?: boolean;
-}
-
-interface Recipe {
-  meal?: string;
-  title: string;
-  emoji?: string;
-  description?: string;
-  prepTime: number;
-  cookTime?: number;
-  servings?: number;
-  healthScore: number;
-  macros: RecipeMacros;
-  calories?: number;
-  protein?: number;
-  carbs?: number;
-  fat?: number;
-  imageUrl?: string | null;
-  ingredients: Ingredient[];
-  steps: string[];
-  goalAlignment?: string;
-  healthBenefits?: string[];
-  swapSuggestion?: string;
-  tags?: string[];
-}
-
-interface DailyRecipe {
-  id: number;
-  mealType: string;
-  recipe: Recipe;
-  date: string;
-  wasRegenerated: boolean;
-}
+import {
+  getGetTodayRecipesQueryOptions,
+  useSaveRecipe,
+  useUpsertShoppingList,
+  getGetSavedRecipesQueryKey,
+  getGetShoppingListQueryKey,
+} from "@workspace/api-client-react";
 
 function MacroBar({
   label,
@@ -134,33 +95,30 @@ export default function RecipeDetailScreen() {
 
   const todayDate = new Date().toISOString().split("T")[0];
 
-  const { data: recipesData, isLoading } = useQuery<{ recipes: DailyRecipe[] }>(
-    {
-      queryKey: ["todayRecipes", todayDate],
-      queryFn: () => apiGet(`/api/recipes/today?date=${todayDate}`),
-    }
-  );
+  const { data: recipesData, isLoading } = useQuery({
+    ...getGetTodayRecipesQueryOptions({ date: todayDate }),
+  });
 
-  const saveMutation = useMutation({
-    mutationFn: (body: { recipe: Recipe }) =>
-      apiPost("/api/saved-recipes", body),
-    onSuccess: () => {
-      setIsSaved(true);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      queryClient.invalidateQueries({ queryKey: ["savedRecipes"] });
+  const saveMutation = useSaveRecipe({
+    mutation: {
+      onSuccess: () => {
+        setIsSaved(true);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        queryClient.invalidateQueries({ queryKey: getGetSavedRecipesQueryKey() });
+      },
     },
   });
 
-  const addToShopMutation = useMutation({
-    mutationFn: (body: { date: string; items: { name: string; amount: string; unit: string; category: string }[] }) =>
-      apiPut("/api/shopping-list", body),
-    onSuccess: () => {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      queryClient.invalidateQueries({ queryKey: ["shoppingList"] });
-      Alert.alert("Added", "Ingredients added to your shopping list");
-    },
-    onError: () => {
-      Alert.alert("Error", "Could not add to shopping list");
+  const addToShopMutation = useUpsertShoppingList({
+    mutation: {
+      onSuccess: () => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        queryClient.invalidateQueries({ queryKey: getGetShoppingListQueryKey() });
+        Alert.alert("Added", "Ingredients added to your shopping list");
+      },
+      onError: () => {
+        Alert.alert("Error", "Could not add to shopping list");
+      },
     },
   });
 
@@ -188,13 +146,13 @@ export default function RecipeDetailScreen() {
   const handleAddToShop = () => {
     if (!recipeData) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const shopItems = recipeData.ingredients.map((ing) => ({
-      name: ing.name,
-      amount: ing.amount,
-      unit: ing.unit,
+    const shopItems = (recipeData.ingredients ?? []).map((ing) => ({
+      name: ing.name ?? "",
+      amount: ing.amount ?? "",
+      unit: ing.unit ?? "",
       category: ing.isKeyIngredient ? "Protein" : "Pantry",
     }));
-    addToShopMutation.mutate({ date: todayDate, items: shopItems });
+    addToShopMutation.mutate({ data: { date: todayDate, items: shopItems } });
   };
 
   if (isLoading) {
@@ -253,7 +211,7 @@ export default function RecipeDetailScreen() {
             <Pressable
               onPress={() => {
                 if (!isSaved && recipeData) {
-                  saveMutation.mutate({ recipe: recipeData });
+                  saveMutation.mutate({ data: { recipeJson: recipeData } });
                 }
               }}
               style={styles.heroButton}
@@ -315,7 +273,7 @@ export default function RecipeDetailScreen() {
             <Text style={styles.macroHeaderText}>Macros per serving</Text>
             <View style={{ flexDirection: "row", alignItems: "baseline", gap: 4 }}>
               <Text style={styles.macroCalValue}>
-                {recipeData.macros.calories}
+                {recipeData.macros?.calories ?? 0}
               </Text>
               <Text style={styles.macroCalUnit}>kcal</Text>
             </View>
@@ -323,19 +281,19 @@ export default function RecipeDetailScreen() {
           <View style={styles.macroBarRow}>
             <MacroBar
               label="Protein"
-              value={recipeData.macros.protein}
+              value={recipeData.macros?.protein ?? 0}
               max={60}
               color={Colors.primary}
             />
             <MacroBar
               label="Carbs"
-              value={recipeData.macros.carbs}
+              value={recipeData.macros?.carbs ?? 0}
               max={100}
               color={Colors.accent}
             />
             <MacroBar
               label="Fat"
-              value={recipeData.macros.fat}
+              value={recipeData.macros?.fat ?? 0}
               max={60}
               color={Colors.blue}
             />
@@ -345,7 +303,7 @@ export default function RecipeDetailScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Ingredients</Text>
           <View style={{ gap: 6 }}>
-            {recipeData.ingredients.map((ing, i) => (
+            {(recipeData.ingredients ?? []).map((ing, i) => (
               <Pressable
                 key={i}
                 onPress={() => toggleIngredient(i)}
@@ -386,7 +344,7 @@ export default function RecipeDetailScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Method</Text>
           <View style={{ gap: 8 }}>
-            {recipeData.steps.map((stepText, i) => (
+            {(recipeData.steps ?? []).map((stepText, i) => (
               <Pressable
                 key={i}
                 onPress={() => toggleStep(i)}
@@ -472,7 +430,7 @@ export default function RecipeDetailScreen() {
         <Pressable
           onPress={() => {
             if (!isSaved && recipeData) {
-              saveMutation.mutate({ recipe: recipeData });
+              saveMutation.mutate({ data: { recipeJson: recipeData } });
             }
           }}
           style={styles.shareButton}

@@ -18,7 +18,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import Colors from "@/constants/colors";
-import { apiPut } from "@/lib/api";
+import { updateProfile } from "@workspace/api-client-react";
 
 type MCIconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
 
@@ -232,19 +232,16 @@ export default function OnboardingScreen() {
 
     setSaving(true);
     try {
-      await apiPut("/api/profile", {
+      await updateProfile({
         dietType: diet,
         allergies: allergies.filter((a) => a !== "None"),
         healthGoal: goal,
         skillLevel: skill,
         caloriesTarget: parseInt(calories, 10) || 2000,
-        proteinTarget: parseInt(protein, 10) || 120,
-        carbsTarget: parseInt(carbs, 10) || 250,
-        fatTarget: parseInt(fat, 10) || 65,
-        city: city || null,
-        country: country || null,
-        lat,
-        lng,
+        city: city || undefined,
+        country: country || undefined,
+        lat: lat ?? undefined,
+        lng: lng ?? undefined,
       });
       await AsyncStorage.removeItem(ONBOARDING_STORAGE_KEY);
       router.replace("/(tabs)");

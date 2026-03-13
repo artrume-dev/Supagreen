@@ -18,47 +18,13 @@ import Svg, { Rect, Text as SvgText } from "react-native-svg";
 
 import Colors from "@/constants/colors";
 import { useAuth } from "@/lib/auth";
-import { apiGet } from "@/lib/api";
-
-interface ProfileData {
-  profile: {
-    userId: string;
-    dietType: string | null;
-    allergies: string[];
-    healthGoal: string | null;
-    skillLevel: string | null;
-    caloriesTarget: number | null;
-    city: string | null;
-    country: string | null;
-    createdAt: string;
-    updatedAt: string;
-  } | null;
-}
-
-interface StreakData {
-  currentStreak: number;
-  longestStreak: number;
-  lastCookedAt: string | null;
-}
-
-interface SavedRecipe {
-  id: number;
-  recipe: {
-    title: string;
-    macros: { calories: number; protein: number; carbs: number; fat: number };
-    imageUrl?: string | null;
-  };
-  savedAt: string;
-}
-
-interface DailyRecipe {
-  id: number;
-  mealType: string;
-  recipe: {
-    macros: { calories: number; protein: number; carbs: number; fat: number };
-  };
-  date: string;
-}
+import {
+  getGetProfileQueryOptions,
+  getGetStreakQueryOptions,
+  getGetSavedRecipesQueryOptions,
+  getGetTodayRecipesQueryOptions,
+  type DailyRecipeItem,
+} from "@workspace/api-client-react";
 
 type IoniconsName = ComponentProps<typeof Ionicons>["name"];
 type FeatherName = ComponentProps<typeof Feather>["name"];
@@ -80,7 +46,7 @@ const BAR_COLORS = [
   Colors.primary,
 ];
 
-function WeeklyMacroChart({ recipes }: { recipes: DailyRecipe[] }) {
+function WeeklyMacroChart({ recipes }: { recipes: DailyRecipeItem[] }) {
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() - (6 - i));
@@ -160,31 +126,29 @@ export default function ProfileScreen() {
   const { user, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<"stats" | "saved">("stats");
 
-  const { data: profileResponse } = useQuery<ProfileData>({
-    queryKey: ["profile"],
-    queryFn: () => apiGet("/api/profile"),
+  const { data: profileResponse } = useQuery({
+    ...getGetProfileQueryOptions(),
   });
 
-  const { data: streakData } = useQuery<StreakData>({
-    queryKey: ["streak"],
-    queryFn: () => apiGet("/api/streak"),
+  const { data: streakData } = useQuery({
+    ...getGetStreakQueryOptions(),
   });
 
-  const { data: savedData } = useQuery<{ recipes: SavedRecipe[] }>({
-    queryKey: ["savedRecipes"],
-    queryFn: () => apiGet("/api/saved-recipes"),
+  const { data: savedData } = useQuery({
+    ...getGetSavedRecipesQueryOptions(),
   });
 
-  const { data: weekRecipesData } = useQuery<{ recipes: DailyRecipe[] }>({
+  const { data: weekRecipesData } = useQuery({
     queryKey: ["weekRecipes"],
     queryFn: async () => {
+      const { getTodayRecipes } = await import("@workspace/api-client-react");
       const promises = Array.from({ length: 7 }, (_, i) => {
         const d = new Date();
         d.setDate(d.getDate() - (6 - i));
         const dateStr = d.toISOString().split("T")[0];
-        return apiGet<{ recipes: DailyRecipe[] }>(`/api/recipes/today?date=${dateStr}`)
+        return getTodayRecipes({ date: dateStr })
           .then((r) => r.recipes || [])
-          .catch(() => [] as DailyRecipe[]);
+          .catch(() => [] as DailyRecipeItem[]);
       });
       const allRecipes = (await Promise.all(promises)).flat();
       return { recipes: allRecipes };
@@ -425,7 +389,7 @@ export default function ProfileScreen() {
                       {sr.recipe.title}
                     </Text>
                     <Text style={styles.savedMeta}>
-                      {sr.recipe.macros.calories} kcal
+                      {sr.recipe.macros?.calories ?? 0} kcal
                     </Text>
                   </View>
                   <View style={styles.savedHeart}>
