@@ -4,6 +4,21 @@
 
 pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
 
+## NutriSnap Design Mockup
+
+A full UI design mockup for NutriSnap — an AI-powered personalised healthy recipe app targeting Gen Z / young Millennials. Built in the mockup sandbox with 5 interactive screens:
+
+- **HomeFeed** — Daily recipe feed with macro rings, streak counter, horizontal-scroll recipe cards
+- **RecipeDetail** — Full-bleed hero image, macros, tap-to-check ingredients & steps, health benefits, smart swap
+- **Onboarding** — 5-step onboarding flow (diet type, allergies, health goal, skill level, location)
+- **ShoppingList** — Grouped shopping list with nearby store cards, check-off, bulk actions
+- **Profile** — Streak milestones, weekly macro bar chart, saved recipes, TikTok share CTA
+
+Design spec:
+- Primary: #22C55E (green) · Accent: #F97316 (orange) · Dark bg: #0F1710 · Cards: #1C2B1E
+- Typography: Plus Jakarta Sans (headings), Inter (body)
+- All components live in `artifacts/mockup-sandbox/src/components/mockups/nutrisnap/`
+
 ## Stack
 
 - **Monorepo tool**: pnpm workspaces

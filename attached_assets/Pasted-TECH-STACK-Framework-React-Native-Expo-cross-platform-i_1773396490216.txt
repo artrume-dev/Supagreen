@@ -1,0 +1,256 @@
+TECH STACK
+
+Framework:     React Native (Expo) — cross-platform iOS + Android
+               OR Next.js 14 (App Router) for web-first MVP
+Backend:       Node.js + Express (or Next.js API routes)
+AI Layer:      Anthropic Claude API (claude-sonnet-4-20250514)
+               — for recipe generation, nutritional analysis, 
+                  ingredient substitutions, Q&A
+Database:      Postgres + Auth + Realtime)
+Location:      Expo Location API (mobile) / browser Geolocation (web)
+               + Google Places API for nearby store lookup
+Maps/Stores:   Google Maps Places API or Foursquare Places API
+               filtered to: Whole Foods, Trader Joe's, ALDI, Tesco,
+               Sainsbury's, Waitrose, Carrefour, etc. by region
+Styling:       NativeWind (mobile) or Tailwind CSS (web)
+Animations:    React Native Reanimated 3 / Framer Motion (web)
+Auth:          Postgresql Auth (magic link + Google OAuth)
+Push Notifs:   Expo Notifications — daily morning recipe delivery
+Analytics:     PostHog (free tier)
+Deployment:    Vercel (web) / EAS Build (mobile)
+
+─────────────────────────────────────────────────────────────
+ONBOARDING FLOW (collect these inputs on first launch)
+─────────────────────────────────────────────────────────────
+Screen 1 — Dietary category (single-select, large pill buttons):
+  [ Vegan ] [ Vegetarian ] [ Pescatarian ]
+  [ Flexitarian ] [ Omnivore ] [ Keto/Low-carb ]
+  [ Paleo ] [ Mediterranean ]
+
+Screen 2 — Allergies & intolerances (multi-select checkboxes):
+  [ Gluten ] [ Dairy ] [ Nuts ] [ Soy ]
+  [ Eggs ] [ Shellfish ] [ Nightshades ] [ None ]
+
+Screen 3 — Health goal (single-select):
+  [ Lose body fat ] [ Build muscle ] [ Improve gut health ]
+  [ Boost energy ] [ Reduce inflammation ] [ General wellness ]
+
+Screen 4 — Cooking skill level:
+  [ Beginner (under 20 min) ] [ Intermediate ] [ Advanced ]
+
+Screen 5 — Location permission prompt
+  "We use your location to find seasonal ingredients and 
+   nearby stores. Never shared with third parties."
+  → Request geolocation → reverse geocode to city/country
+
+Screen 6 — Calorie / macro target (optional, skippable):
+  Slider for daily calories (1200–3500 kcal)
+  Toggle: track macros manually vs let AI decide
+
+Save all inputs to Supabase user_profiles table.
+
+
+CORE AI RECIPE GENERATION
+
+System prompt for each daily generation:
+
+  "You are a certified nutritionist and chef. Generate exactly 
+   3 complete recipes (breakfast, lunch, dinner) for a user 
+   with the following profile:
+   - Diet: {diet_type}
+   - Allergies: {allergies}
+   - Goal: {health_goal}
+   - Skill level: {skill_level}
+   - Location: {city}, {country}
+   - Season: {current_season}
+   - Daily calorie target: {calories} kcal
+   
+   STRICT RULES:
+   1. Every single ingredient must be a 100% whole, unprocessed food.
+      No protein powders, artificial sweeteners, processed snacks,
+      refined sugar, white flour, seed oils (canola, soybean, sunflower),
+      or ultra-processed ingredients.
+   2. Ingredients must be SEASONALLY AVAILABLE in {country} 
+      during {current_season}.
+   3. Provide macros (protein g, carbs g, fat g, calories) per serving.
+   4. Prep time must match skill level.
+   5. Each recipe must serve the goal: e.g. high-protein for muscle 
+      building, anti-inflammatory foods for inflammation goals.
+   6. Format response as valid JSON matching this schema:
+      {
+        recipes: [
+          {
+            meal: 'breakfast' | 'lunch' | 'dinner',
+            title: string,
+            emoji: string,
+            prepTime: number (minutes),
+            servings: number,
+            healthScore: number (1-10),
+            goalAlignment: string (one sentence),
+            macros: { calories, protein, carbs, fat },
+            ingredients: [
+              { name, amount, unit, isKeyIngredient: boolean }
+            ],
+            steps: [string],
+            healthBenefits: [string] (max 3 bullet points),
+            swapSuggestion: string (one easy ingredient swap)
+          }
+        ]
+      }
+   Return ONLY valid JSON. No markdown, no preamble."
+
+Cache generated recipes in Supabase with the date + user_id as key.
+Regenerate only if: user requests it, date changes, or preferences update.
+Allow user to "regenerate one meal" (costs 1 API call) up to 3x/day.
+
+─────────────────────────────────────────────────────────────
+STORE & INGREDIENT AVAILABILITY FEATURE
+─────────────────────────────────────────────────────────────
+After recipe generation:
+1. Extract all ingredients from today's 3 recipes into a unified list
+2. Call Google Places API with:
+   - query: "supermarket" OR "health food store" OR "grocery store"
+   - location: user lat/lng
+   - radius: 3000m (adjustable in settings)
+   - type: supermarket
+3. Return top 5 nearest stores with:
+   - Store name, chain logo (if available), distance, opening hours
+   - Google Maps deeplink for directions
+   - "Tap to navigate" CTA
+4. Display a combined shopping list grouped by store section:
+   (Produce / Protein / Grains / Dairy alternatives / Pantry)
+5. Allow user to check off items as they shop
+6. "Share shopping list" button → exports as plain text or saves to 
+   Apple Reminders / Google Tasks via deep link
+
+─────────────────────────────────────────────────────────────
+UI / UX DESIGN DIRECTION
+─────────────────────────────────────────────────────────────
+Aesthetic: Clean, vibrant, Gen Z-friendly. Think "Notion meets 
+Headspace meets a premium food magazine."
+
+Color palette:
+  Primary:   #22C55E (fresh green — health, vitality)
+  Accent:    #F97316 (warm orange — appetite, energy)
+  Surface:   #FAFAF9 (off-white — clean, airy)
+  Dark mode: #0F1710 background, #1C2B1E cards
+
+Typography:
+  Headings:  Plus Jakarta Sans (Bold 700)
+  Body:      Inter (Regular 400, Medium 500)
+  Numbers:   Tabular nums, monospace for macros display
+
+Key screens to build:
+
+  HOME / DAILY FEED
+  - Top: greeting + streak counter + date
+  - 3 horizontal-scroll recipe cards with hero food photo 
+    (use Unsplash API with food keyword matching recipe title)
+  - Each card shows: emoji, title, prep time pill, health score badge,
+    primary macro highlight (e.g. "32g protein")
+  - Tap card → Recipe Detail screen
+
+  RECIPE DETAIL
+  - Full-bleed hero image at top
+  - Scrollable content below: Goal alignment banner (e.g. 🔥 "Optimised 
+    for fat loss"), macro rings (circular progress), ingredients list 
+    with tick-off, step-by-step with numbered cards, health benefits 
+    chips, swap suggestion card
+  - Bottom sticky bar: "Add all to shopping list" + "Share" buttons
+
+  SHOPPING LIST
+  - Grouped by store section with section headers
+  - Nearby stores carousel at top (distance badges)
+  - Each item: checkbox + ingredient name + amount
+  - Bulk actions: "Copy all" / "Share" / "Clear checked"
+
+  EXPLORE / DISCOVER (secondary tab)
+  - Filter by: meal type, goal, diet, prep time, cuisine
+  - "Surprise me" button generates a random compliant recipe
+  - Saved recipes library
+
+  PROFILE & STREAKS
+  - Streak flame animation (Duolingo-style)
+  - Weekly macro summary chart (bar chart, 7-day)
+  - Edit preferences shortcut
+  - "Share my week" → generates a TikTok-ready summary card
+
+  SOCIAL SHARE FEATURE (TikTok-first)
+  - "Share recipe" generates a branded vertical card (9:16 ratio):
+    Recipe title + hero image + macros + NutriSnap logo watermark
+  - One-tap share to TikTok, Instagram Stories, WhatsApp
+  - Optional: "Record my cook" → opens native camera
+
+GAMIFICATION & RETENTION
+
+- Daily streak: cook at least 1 recipe → +1 streak day
+  Streaks: 3d 🌱, 7d 🔥, 14d ⚡, 30d 🏆
+- Weekly challenge: e.g. "Eat 5 different vegetables this week"
+- Push notification at 7:30am: "Your recipes for today are ready 🥗"
+- Optional evening check-in: "Did you cook today?" (simple yes/no)
+- Milestone cards shareable to social (e.g. "30-day streak!")
+
+ADDITIONAL AI FEATURES (progressive enhancement)
+
+1. NutriChat — floating AI assistant button on every screen
+   "Ask me anything about today's recipes or nutrition"
+   Uses Claude with conversation history + user profile as context
+
+2. Ingredient scanner — camera scan a food item → Claude identifies 
+   it and tells you if it fits their diet + how to use it
+
+3. Fridge mode — user types or speaks what's in their fridge →
+   Claude generates a compliant recipe from those exact ingredients
+
+4. Meal swap — tap any ingredient → Claude suggests 3 whole-food 
+   swaps with nutritional comparison
+
+5. Weekly meal prep guide — Sunday feature: Claude generates a prep 
+   plan to batch-cook the week's meals efficiently
+
+
+DATABASE SCHEMA (Postgres)
+
+users              id, email, created_at
+user_profiles      user_id, diet_type, allergies[], health_goal,
+                   skill_level, calories_target, city, country,
+                   lat, lng, streak_count, last_cooked_at
+daily_recipes      id, user_id, date, meal_type, recipe_json,
+                   generated_at, was_regenerated
+saved_recipes      id, user_id, recipe_json, saved_at
+shopping_lists     id, user_id, date, items_json, checked_items[]
+user_streaks       user_id, current_streak, longest_streak,
+                   streak_history[]
+
+
+MONETISATION (future phase)
+
+Free tier:    3 recipes/day, basic store finder, 5 regenerations/week
+Pro ($4.99/mo): Unlimited regenerations, fridge mode, ingredient 
+                scanner, NutriChat, weekly meal prep guide,
+                advanced macro tracking, ad-free
+Creator tier ($9.99/mo): All Pro + custom branded share cards,
+                          recipe collections, shareable profile page
+
+
+BUILD INSTRUCTIONS FOR ONE-SHOT
+
+Build the complete working app with:
+1. All onboarding screens with form state management
+2. Claude API integration for recipe generation with the exact 
+   prompt template above
+3. Google Places API integration for store finding
+4. Home feed with real recipe cards (fetch from Supabase or 
+   generate fresh if none exist for today)
+5. Recipe detail screen with full ingredient + step display
+6. Shopping list screen with check-off functionality
+7. Profile screen with streak display
+8. Supabase auth (email magic link)
+9. Dark mode support throughout
+10. Skeleton loading states for all async content
+11. Error states with retry options
+12. Empty states with helpful CTAs
+
+Use realistic placeholder data for the first render if the API 
+hasn't been called yet. Make every screen pixel-perfect and 
+production-ready. Do not leave TODO comments — implement fully.
