@@ -191,7 +191,7 @@ router.get("/shopping-list/stores", async (req: Request, res: Response) => {
       .from(userProfilesTable)
       .where(eq(userProfilesTable.userId, req.user!.id));
 
-    if (!profile?.lat || !profile?.lng) {
+    if (profile?.lat == null || profile?.lng == null) {
       res.status(400).json({
         error:
           "lat and lng query parameters are required, or set your location in your profile",
