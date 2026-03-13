@@ -3,8 +3,9 @@ import type { ComponentProps } from "react";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import React, { useCallback } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import {
+  Animated,
   Platform,
   Pressable,
   ScrollView,
@@ -224,24 +225,47 @@ function RecipeCard({
   );
 }
 
+function ShimmerBlock({ width, height, borderRadius = 8 }: { width: number | string; height: number; borderRadius?: number }) {
+  const shimmerAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmerAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
+        Animated.timing(shimmerAnim, { toValue: 0, duration: 1000, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [shimmerAnim]);
+
+  const opacity = shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.7] });
+
+  return (
+    <Animated.View
+      style={{
+        width: width as number,
+        height,
+        borderRadius,
+        backgroundColor: Colors.cardLight,
+        opacity,
+      }}
+    />
+  );
+}
+
 function SkeletonCard() {
   return (
     <View style={styles.recipeCard}>
-      <View
-        style={[
-          styles.recipeImageContainer,
-          { backgroundColor: Colors.cardLight },
-        ]}
-      />
-      <View style={[styles.macroRow, { height: 60 }]}>
-        <View
-          style={{
-            width: 120,
-            height: 16,
-            borderRadius: 8,
-            backgroundColor: Colors.cardLight,
-          }}
-        />
+      <ShimmerBlock width="100%" height={160} borderRadius={0} />
+      <View style={{ padding: 14, gap: 10 }}>
+        <ShimmerBlock width={140} height={16} />
+        <ShimmerBlock width={200} height={12} />
+        <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
+          <ShimmerBlock width={50} height={24} borderRadius={12} />
+          <ShimmerBlock width={50} height={24} borderRadius={12} />
+          <ShimmerBlock width={50} height={24} borderRadius={12} />
+        </View>
       </View>
     </View>
   );

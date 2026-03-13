@@ -57,7 +57,7 @@ export function useAuthProvider(): AuthState {
   const [isLoading, setIsLoading] = useState(true);
 
   const redirectUri = makeRedirectUri({
-    scheme: "nutrisnap",
+    scheme: "mobile-app",
     path: "auth/callback",
   });
 

@@ -240,32 +240,36 @@ export default function ShoppingScreen() {
             {stores.length > 0 && (
               <View style={styles.storesSection}>
                 <Text style={styles.storesSectionTitle}>Nearby Stores</Text>
-                {stores.slice(0, 3).map((store) => (
-                  <View key={store.id} style={styles.storeCard}>
-                    <View style={styles.storeIconContainer}>
-                      <Ionicons name="storefront" size={18} color={Colors.primary} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.storeName}>{store.name}</Text>
-                      <Text style={styles.storeAddress} numberOfLines={1}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.storesScrollContent}
+                >
+                  {stores.slice(0, 5).map((store) => (
+                    <View key={store.id} style={styles.storeCard}>
+                      <View style={styles.storeIconContainer}>
+                        <Ionicons name="storefront" size={20} color={Colors.primary} />
+                      </View>
+                      <Text style={styles.storeName} numberOfLines={1}>{store.name}</Text>
+                      <Text style={styles.storeAddress} numberOfLines={2}>
                         {store.address}
                       </Text>
+                      <View style={styles.storeFooter}>
+                        {store.rating != null && (
+                          <View style={styles.ratingBadge}>
+                            <Feather name="star" size={10} color={Colors.accent} />
+                            <Text style={styles.ratingText}>{store.rating.toFixed(1)}</Text>
+                          </View>
+                        )}
+                        {store.openNow != null && (
+                          <Text style={[styles.openText, { color: store.openNow ? Colors.primary : Colors.error }]}>
+                            {store.openNow ? "Open" : "Closed"}
+                          </Text>
+                        )}
+                      </View>
                     </View>
-                    <View style={styles.storeRight}>
-                      {store.rating != null && (
-                        <View style={styles.ratingBadge}>
-                          <Feather name="star" size={10} color={Colors.accent} />
-                          <Text style={styles.ratingText}>{store.rating.toFixed(1)}</Text>
-                        </View>
-                      )}
-                      {store.openNow != null && (
-                        <Text style={[styles.openText, { color: store.openNow ? Colors.primary : Colors.error }]}>
-                          {store.openNow ? "Open" : "Closed"}
-                        </Text>
-                      )}
-                    </View>
-                  </View>
-                ))}
+                  ))}
+                </ScrollView>
               </View>
             )}
           </>
@@ -443,7 +447,6 @@ const styles = StyleSheet.create({
     color: Colors.textTertiary,
   },
   storesSection: {
-    paddingHorizontal: 20,
     marginTop: 8,
     marginBottom: 20,
   },
@@ -452,16 +455,18 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
     color: Colors.text,
     marginBottom: 12,
+    paddingHorizontal: 20,
+  },
+  storesScrollContent: {
+    paddingHorizontal: 20,
+    gap: 12,
   },
   storeCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
+    width: 160,
     backgroundColor: Colors.card,
     borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    marginBottom: 8,
+    padding: 14,
+    gap: 8,
   },
   storeIconContainer: {
     width: 36,
@@ -470,6 +475,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(34,197,94,0.15)",
     justifyContent: "center",
     alignItems: "center",
+    marginBottom: 4,
   },
   storeName: {
     fontSize: 14,
@@ -477,14 +483,16 @@ const styles = StyleSheet.create({
     color: Colors.text,
   },
   storeAddress: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: "Inter_400Regular",
     color: Colors.textSecondary,
-    marginTop: 2,
+    lineHeight: 15,
   },
-  storeRight: {
-    alignItems: "flex-end",
-    gap: 4,
+  storeFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 4,
   },
   ratingBadge: {
     flexDirection: "row",
