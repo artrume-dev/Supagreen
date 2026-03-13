@@ -52,7 +52,7 @@ export default function AIReveal() {
                   transition={{ delay: 0.2 }}
                   className="bg-primary/20 text-primary text-[3vw] px-3 py-1 rounded-full font-bold uppercase"
                 >
-                  Energy Boost
+                  Whole Foods • Tailored to You
                 </motion.span>
                 <motion.h2 
                   initial={{ opacity: 0, y: 10 }}

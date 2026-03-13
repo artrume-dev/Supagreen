@@ -5,14 +5,14 @@ import gsap from 'gsap';
 const IMAGES = [
   {
     src: 'https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?w=600&q=80',
-    word1: 'EAT',
-    word2: 'WELL',
+    word1: 'WHOLE',
+    word2: 'FOODS',
     color: 'text-primary'
   },
   {
     src: 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=600&q=80',
-    word1: 'FEEL',
-    word2: 'GREAT',
+    word1: 'YOUR',
+    word2: 'GOALS',
     color: 'text-[#F97316]'
   },
   {
