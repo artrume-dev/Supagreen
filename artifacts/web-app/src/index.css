@@ -74,3 +74,13 @@
 .glass-panel {
   @apply bg-card/80 backdrop-blur-xl border border-white/5 shadow-xl;
 }
+
+/* iOS safe area bottom padding (for iPhone home indicator) */
+.pb-safe {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+/* Ensure the app root fills the dynamic viewport (excludes Safari browser chrome) */
+#root {
+  min-height: 100dvh;
+}

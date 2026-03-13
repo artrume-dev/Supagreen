@@ -1,12 +1,15 @@
 import { useState, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import { 
   useGetTodayRecipes, 
   useSaveRecipe, 
   useDeleteSavedRecipe, 
   useGetSavedRecipes,
   useUpsertShoppingList,
-  useUpdateStreak
+  useUpdateStreak,
+  getShoppingList,
+  getGetShoppingListQueryKey
 } from "@workspace/api-client-react";
 import { getTodayStr, cn } from "@/lib/utils";
 import { ArrowLeft, Heart, Clock, ChefHat, Star, CheckCircle2, Share, ShoppingCart, Info, Flame } from "lucide-react";
@@ -34,6 +37,7 @@ export function RecipeDetail() {
   const id = params?.id;
   const today = getTodayStr();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const { data: todayData, isLoading: todayLoading } = useGetTodayRecipes({ date: today });
   const { data: savedData, isLoading: savedLoading } = useGetSavedRecipes();
@@ -119,13 +123,34 @@ export function RecipeDetail() {
 
   const handleAddShoppingList = async () => {
     try {
-      const items = (recipe.ingredients || []).map(ing => ({
+      const newItems = (recipe.ingredients || []).map(ing => ({
         name: ing.name || 'Unknown',
         amount: ing.amount || '1',
         unit: ing.unit || '',
-        category: 'Grocery' // Simple fallback
+        category: 'Grocery',
       }));
-      await addToShopping({ data: { date: today, items } });
+
+      let existingItems: typeof newItems = [];
+      try {
+        const existing = await getShoppingList({ date: today });
+        existingItems = (existing.items || []).map(i => ({
+          name: i.name,
+          amount: i.amount,
+          unit: i.unit || '',
+          category: i.category || 'Grocery',
+        }));
+      } catch {
+        // No existing list is fine
+      }
+
+      const existingNames = new Set(existingItems.map(i => i.name.toLowerCase()));
+      const merged = [
+        ...existingItems,
+        ...newItems.filter(i => !existingNames.has(i.name.toLowerCase())),
+      ];
+
+      await addToShopping({ data: { date: today, items: merged } });
+      queryClient.invalidateQueries({ queryKey: getGetShoppingListQueryKey({ date: today }) });
       toast({ title: "Added to Shopping List 🛒", description: "You can view it in the Shop tab." });
     } catch (e) {
       toast({ title: "Error adding to list", variant: "destructive" });
