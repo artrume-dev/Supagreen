@@ -1,0 +1,31 @@
+kind = "video"
+previewPath = "/tiktok-teaser/"
+title = "NutriSnap TikTok Teaser"
+version = "1.0.0"
+id = "artifacts/tiktok-teaser"
+router = "path"
+
+[[integratedSkills]]
+name = "video-js"
+version = "1.0.0"
+
+[[services]]
+localPort = 23613
+name = "web"
+paths = ["/tiktok-teaser/"]
+
+[services.development]
+run = "pnpm --filter @workspace/tiktok-teaser run dev"
+
+[services.env]
+PORT = "23613"
+BASE_PATH = "/tiktok-teaser/"
+
+[services.production]
+build = ["pnpm", "--filter", "@workspace/tiktok-teaser", "run", "build"]
+publicDir = "artifacts/tiktok-teaser/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
