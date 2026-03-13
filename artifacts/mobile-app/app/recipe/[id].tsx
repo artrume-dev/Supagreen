@@ -76,7 +76,7 @@ function MacroBar({
   color: string;
 }) {
   const pct = Math.min(value / max, 1);
-  const widthPct = `${pct * 100}%`;
+  const widthPct = `${pct * 100}%` as `${number}%`;
   return (
     <View style={{ flex: 1, alignItems: "center" }}>
       <Text style={mbStyles.value}>{value}g</Text>

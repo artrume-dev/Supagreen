@@ -243,8 +243,8 @@ export default function OnboardingScreen() {
         fatTarget: parseInt(fat, 10) || 65,
         city: city || null,
         country: country || null,
-        latitude: lat,
-        longitude: lng,
+        lat,
+        lng,
       });
       await AsyncStorage.removeItem(ONBOARDING_STORAGE_KEY);
       router.replace("/(tabs)");
@@ -556,7 +556,7 @@ export default function OnboardingScreen() {
               colors={[Colors.primary, Colors.accent]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
-              style={[styles.progressFill, { width: progressPct }]}
+              style={[styles.progressFill, { width: progressPct as `${number}%` }]}
             />
           </View>
         </View>

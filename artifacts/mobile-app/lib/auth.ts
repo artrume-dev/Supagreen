@@ -1,10 +1,17 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { AuthRequest, makeRedirectUri } from "expo-auth-session";
+import * as WebBrowser from "expo-web-browser";
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
-import * as AuthSession from "expo-web-browser";
-import { Platform } from "react-native";
+
+WebBrowser.maybeCompleteAuthSession();
 
 const TOKEN_KEY = "nutrisnap_session_token";
 const ISSUER_URL = "https://replit.com/oidc";
+
+const discovery = {
+  authorizationEndpoint: `${ISSUER_URL}/auth`,
+  tokenEndpoint: `${ISSUER_URL}/token`,
+};
 
 function getApiBase(): string {
   const domain = process.env.EXPO_PUBLIC_DOMAIN;
@@ -42,40 +49,17 @@ export function useAuth(): AuthState {
   return useContext(AuthContext);
 }
 
-function generateRandom(length: number): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
-  let result = "";
-  for (let i = 0; i < length; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
-}
-
-async function sha256(plain: string): Promise<string> {
-  if (Platform.OS === "web") {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(plain);
-    const hash = await crypto.subtle.digest("SHA-256", data);
-    return btoa(String.fromCharCode(...new Uint8Array(hash)))
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/, "");
-  }
-  const encoder = new TextEncoder();
-  const data = encoder.encode(plain);
-  const hash = await globalThis.crypto.subtle.digest("SHA-256", data);
-  return btoa(String.fromCharCode(...new Uint8Array(hash)))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-}
-
 export { AuthContext };
 
 export function useAuthProvider(): AuthState {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const redirectUri = makeRedirectUri({
+    scheme: "nutrisnap",
+    path: "auth/callback",
+  });
 
   const fetchUser = useCallback(async (sessionToken: string) => {
     try {
@@ -119,44 +103,30 @@ export function useAuthProvider(): AuthState {
     try {
       const apiBase = getApiBase();
       const replId = process.env.EXPO_PUBLIC_REPL_ID || "";
-      const redirectUri = `${apiBase}/api/callback`;
-      const state = generateRandom(32);
-      const nonce = generateRandom(32);
-      const codeVerifier = generateRandom(64);
-      const codeChallenge = await sha256(codeVerifier);
 
-      const params = new URLSearchParams({
-        client_id: replId,
-        redirect_uri: redirectUri,
-        response_type: "code",
-        scope: "openid email profile offline_access",
-        code_challenge: codeChallenge,
-        code_challenge_method: "S256",
-        prompt: "login consent",
-        state,
-        nonce,
+      const request = new AuthRequest({
+        clientId: replId,
+        redirectUri,
+        scopes: ["openid", "email", "profile", "offline_access"],
+        usePKCE: true,
+        extraParams: {
+          prompt: "login consent",
+        },
       });
 
-      const authUrl = `${ISSUER_URL}/auth?${params.toString()}`;
-      const result = await AuthSession.openBrowserAsync(authUrl, {
-        showInRecents: true,
-      });
+      const result = await request.promptAsync(discovery);
 
-      if (result.type === "cancel") return;
-
-      const url = new URL(result.url || "");
-      const code = url.searchParams.get("code");
-      if (!code) return;
+      if (result.type !== "success" || !result.params?.code) return;
 
       const exchangeRes = await fetch(`${apiBase}/api/mobile-auth/token-exchange`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          code,
-          code_verifier: codeVerifier,
+          code: result.params.code,
+          code_verifier: request.codeVerifier,
           redirect_uri: redirectUri,
-          state,
-          nonce,
+          state: request.state,
+          nonce: request.extraParams?.nonce,
         }),
       });
 
@@ -171,7 +141,7 @@ export function useAuthProvider(): AuthState {
     } catch (e) {
       console.error("Sign in error:", e);
     }
-  }, [fetchUser]);
+  }, [fetchUser, redirectUri]);
 
   const signOut = useCallback(async () => {
     try {
