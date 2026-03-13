@@ -24,12 +24,19 @@ const savedRecipes = [
   { title: "Walnut & Oat Granola", emoji: "🌰", img: "https://images.unsplash.com/photo-1517093728677-a9e7e1b25b7c?w=200&q=80", kcal: 290 },
 ];
 
+const profileInfo = {
+  dietType: "Mediterranean",
+  allergies: "None",
+  healthGoal: "Build Muscle",
+  skillLevel: "Intermediate",
+  calorieTarget: "2,000 kcal",
+};
+
 export function Profile() {
   const [activeTab, setActiveTab] = useState<"week" | "saved">("week");
 
   return (
     <div className="min-h-screen bg-[#0F1710] font-sans max-w-[390px] mx-auto flex flex-col pb-24">
-      {/* Header */}
       <div className="px-5 pt-10 pb-4">
         <div className="flex items-start justify-between mb-5">
           <div>
@@ -41,7 +48,6 @@ export function Profile() {
           </button>
         </div>
 
-        {/* Avatar + streak hero */}
         <div className="bg-gradient-to-br from-[#1C2B1E] to-[#0F1710] border border-white/10 rounded-3xl p-5 flex items-center gap-5">
           <div className="relative">
             <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#22C55E] to-emerald-700 flex items-center justify-center text-4xl">
@@ -69,7 +75,6 @@ export function Profile() {
         </div>
       </div>
 
-      {/* Milestones */}
       <div className="px-5 mb-5">
         <h2 className="text-white font-bold text-base mb-3">Milestones</h2>
         <div className="flex gap-3">
@@ -87,7 +92,6 @@ export function Profile() {
         </div>
       </div>
 
-      {/* Stats strip */}
       <div className="flex gap-3 px-5 mb-5">
         {[
           { label: "Meals cooked", value: "42", icon: "🍳" },
@@ -102,7 +106,6 @@ export function Profile() {
         ))}
       </div>
 
-      {/* Tabs */}
       <div className="flex gap-2 px-5 mb-4">
         <button
           onClick={() => setActiveTab("week")}
@@ -160,7 +163,28 @@ export function Profile() {
             </div>
           </div>
 
-          {/* Share card */}
+          <div className="mt-4 bg-[#1C2B1E] rounded-2xl p-4">
+            <h3 className="text-white font-bold text-sm mb-3">My Profile</h3>
+            <div className="space-y-3">
+              {[
+                { label: "Diet Type", value: profileInfo.dietType, icon: "🥗" },
+                { label: "Allergies", value: profileInfo.allergies, icon: "⚠" },
+                { label: "Health Goal", value: profileInfo.healthGoal, icon: "🎯" },
+                { label: "Skill Level", value: profileInfo.skillLevel, icon: "👨‍🍳" },
+                { label: "Calorie Target", value: profileInfo.calorieTarget, icon: "🔥" },
+              ].map((row) => (
+                <div key={row.label} className="flex items-center gap-3">
+                  <span className="text-base">{row.icon}</span>
+                  <span className="text-white/50 text-xs flex-1">{row.label}</span>
+                  <span className="text-white text-xs font-semibold">{row.value}</span>
+                </div>
+              ))}
+            </div>
+            <button className="mt-4 w-full bg-[#22C55E]/15 text-[#22C55E] font-semibold text-sm py-2.5 rounded-xl">
+              ✏ Edit Profile
+            </button>
+          </div>
+
           <button className="mt-3 w-full bg-gradient-to-r from-[#F97316]/20 to-transparent border border-[#F97316]/30 rounded-2xl px-4 py-3.5 flex items-center gap-3">
             <span className="text-2xl">📱</span>
             <div className="text-left">
@@ -187,11 +211,15 @@ export function Profile() {
         </div>
       )}
 
-      {/* Bottom Nav */}
+      <div className="px-5 mt-6">
+        <button className="w-full bg-red-500/10 border border-red-500/20 text-red-400 font-semibold text-sm py-3.5 rounded-2xl">
+          Sign Out
+        </button>
+      </div>
+
       <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-[#1C2B1E]/90 backdrop-blur-xl border-t border-white/5 px-4 py-3 pb-6 flex justify-around">
         {[
           { id: "home", icon: "🏠", label: "Home" },
-          { id: "explore", icon: "🔍", label: "Explore" },
           { id: "shopping", icon: "🛒", label: "Shop" },
           { id: "profile", icon: "👤", label: "Profile" },
         ].map((tab) => (

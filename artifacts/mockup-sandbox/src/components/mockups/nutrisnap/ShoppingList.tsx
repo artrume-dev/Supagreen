@@ -47,7 +47,6 @@ const sections = [
 
 export function ShoppingList() {
   const [items, setItems] = useState(sections.map((s) => ({ ...s, items: s.items.map((i) => ({ ...i })) })));
-  const [activeStore, setActiveStore] = useState(0);
 
   const toggleItem = (sIdx: number, iIdx: number) => {
     const next = items.map((s, si) => si !== sIdx ? s : {
@@ -62,7 +61,6 @@ export function ShoppingList() {
 
   return (
     <div className="min-h-screen bg-[#0F1710] font-sans max-w-[390px] mx-auto flex flex-col">
-      {/* Header */}
       <div className="px-5 pt-10 pb-4 bg-[#0F1710] sticky top-0 z-10">
         <div className="flex items-center justify-between mb-1">
           <h1 className="text-white font-bold text-2xl">Shopping List</h1>
@@ -70,7 +68,6 @@ export function ShoppingList() {
         </div>
         <p className="text-white/40 text-sm">{checkedCount} of {totalItems} items checked · Today's 3 meals</p>
 
-        {/* Progress */}
         <div className="mt-3 h-1.5 bg-white/10 rounded-full overflow-hidden">
           <div
             className="h-full bg-gradient-to-r from-[#22C55E] to-emerald-400 rounded-full transition-all duration-500"
@@ -79,50 +76,13 @@ export function ShoppingList() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
-        {/* Nearby stores */}
-        <div className="px-5 mb-5">
-          <h2 className="text-white font-bold text-base mb-3">📍 Nearby Stores</h2>
-          <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-hide">
-            {stores.map((store, i) => (
-              <button
-                key={i}
-                onClick={() => setActiveStore(i)}
-                className={`flex-shrink-0 rounded-2xl p-3.5 transition-all text-left w-48 ${activeStore === i ? "bg-[#22C55E]/15 border-2 border-[#22C55E]" : "bg-[#1C2B1E] border-2 border-transparent"}`}
-              >
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-8 h-8 bg-[#22C55E]/20 rounded-lg flex items-center justify-center text-lg">
-                    {store.logo}
-                  </div>
-                  <div>
-                    <p className="text-white text-xs font-bold leading-tight">{store.name}</p>
-                    <p className="text-white/40 text-[10px]">{store.distance}</p>
-                  </div>
-                </div>
-                <p className="text-[#22C55E] text-[10px] font-medium">{store.open}</p>
-                <div className="flex items-center justify-between mt-2">
-                  <span className="text-white/40 text-[10px]">★ {store.rating}</span>
-                  <span className="text-[#22C55E] text-[10px] font-semibold">Navigate →</span>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Bulk actions */}
+      <div className="flex-1 overflow-y-auto pb-8">
         <div className="flex gap-2 px-5 mb-4">
-          <button className="flex-1 bg-[#1C2B1E] text-white/60 text-xs font-semibold py-2.5 rounded-xl">
+          <button className="bg-[#1C2B1E] text-white/60 text-xs font-semibold py-2.5 px-4 rounded-xl">
             📋 Copy all
           </button>
-          <button className="flex-1 bg-[#1C2B1E] text-white/60 text-xs font-semibold py-2.5 rounded-xl">
-            ✓ Clear checked
-          </button>
-          <button className="flex-1 bg-[#1C2B1E] text-white/60 text-xs font-semibold py-2.5 rounded-xl">
-            📤 Export
-          </button>
         </div>
 
-        {/* Sections */}
         {items.map((section, sIdx) => (
           <div key={sIdx} className="px-5 mb-5">
             <div className="flex items-center justify-between mb-2">
@@ -154,14 +114,29 @@ export function ShoppingList() {
           </div>
         ))}
 
-        <div className="h-24" />
-      </div>
-
-      {/* Bottom sticky CTA */}
-      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-[#1C2B1E]/95 backdrop-blur-xl border-t border-white/5 px-5 py-4 pb-8">
-        <button className="w-full bg-[#22C55E] text-white font-bold py-3.5 rounded-2xl flex items-center justify-center gap-2">
-          🗺 Navigate to {stores[activeStore].name}
-        </button>
+        <div className="px-5 mb-5">
+          <h2 className="text-white font-bold text-base mb-3">📍 Nearby Stores</h2>
+          <div className="space-y-3">
+            {stores.map((store, i) => (
+              <div
+                key={i}
+                className="bg-[#1C2B1E] rounded-2xl p-4 flex items-center gap-4"
+              >
+                <div className="w-10 h-10 bg-[#22C55E]/20 rounded-xl flex items-center justify-center text-xl">
+                  {store.logo}
+                </div>
+                <div className="flex-1">
+                  <p className="text-white text-sm font-bold">{store.name}</p>
+                  <p className="text-[#22C55E] text-xs font-medium">{store.open}</p>
+                </div>
+                <div className="text-right flex flex-col items-end gap-1">
+                  <p className="text-white/40 text-xs">{store.distance} · ★ {store.rating}</p>
+                  <span className="text-[#22C55E] text-xs font-semibold">Navigate →</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

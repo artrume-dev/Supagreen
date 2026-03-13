@@ -53,6 +53,7 @@ function MacroBar({ label, value, max, color }: { label: string; value: number; 
 export function RecipeDetail() {
   const [checkedIngredients, setCheckedIngredients] = useState<Set<number>>(new Set());
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
+  const [isSaved, setIsSaved] = useState(false);
 
   const toggleIngredient = (i: number) => {
     const next = new Set(checkedIngredients);
@@ -68,7 +69,6 @@ export function RecipeDetail() {
 
   return (
     <div className="min-h-screen bg-[#0F1710] font-sans max-w-[390px] mx-auto flex flex-col overflow-hidden">
-      {/* Hero */}
       <div className="relative h-64 flex-shrink-0">
         <img
           src="https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=800&q=80"
@@ -82,13 +82,20 @@ export function RecipeDetail() {
           </button>
         </div>
         <div className="absolute top-4 right-4">
-          <button className="w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center text-white">
-            ♡
+          <button
+            className="w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center text-white"
+            onClick={() => setIsSaved(!isSaved)}
+          >
+            {isSaved ? (
+              <span className="text-[#22C55E]">♥</span>
+            ) : (
+              <span>♡</span>
+            )}
           </button>
         </div>
         <div className="absolute bottom-4 left-5 right-5">
           <div className="flex gap-2 mb-2">
-            <span className="bg-[#22C55E]/90 backdrop-blur-sm text-white text-xs font-semibold px-3 py-1 rounded-full capitalize">
+            <span className="bg-[#22C55E] text-white text-xs font-semibold px-3 py-1 rounded-full capitalize">
               {recipe.meal}
             </span>
             <span className="bg-white/20 backdrop-blur-sm text-white text-xs font-semibold px-3 py-1 rounded-full">
@@ -99,15 +106,12 @@ export function RecipeDetail() {
         </div>
       </div>
 
-      {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto pb-24">
-        {/* Goal alignment banner */}
         <div className="mx-5 mt-4 bg-gradient-to-r from-[#F97316]/20 to-transparent border border-[#F97316]/30 rounded-2xl p-3.5">
           <p className="text-[#F97316] text-xs font-bold mb-0.5">💪 GOAL ALIGNMENT</p>
           <p className="text-white/80 text-xs leading-relaxed">{recipe.goalAlignment}</p>
         </div>
 
-        {/* Health Score */}
         <div className="flex items-center gap-3 mx-5 mt-4">
           <div className="bg-[#22C55E] text-white font-black text-lg px-3 py-1 rounded-xl">★ {recipe.healthScore}</div>
           <div>
@@ -116,7 +120,6 @@ export function RecipeDetail() {
           </div>
         </div>
 
-        {/* Macros */}
         <div className="mx-5 mt-4 bg-[#1C2B1E] rounded-2xl p-4">
           <div className="flex items-center justify-between mb-3">
             <span className="text-white font-semibold">Macros per serving</span>
@@ -129,7 +132,6 @@ export function RecipeDetail() {
           </div>
         </div>
 
-        {/* Ingredients */}
         <div className="mx-5 mt-5">
           <h2 className="text-white font-bold text-base mb-3">Ingredients</h2>
           <div className="space-y-2">
@@ -152,7 +154,6 @@ export function RecipeDetail() {
           </div>
         </div>
 
-        {/* Steps */}
         <div className="mx-5 mt-5">
           <h2 className="text-white font-bold text-base mb-3">Method</h2>
           <div className="space-y-3">
@@ -171,7 +172,6 @@ export function RecipeDetail() {
           </div>
         </div>
 
-        {/* Health benefits */}
         <div className="mx-5 mt-5">
           <h2 className="text-white font-bold text-base mb-3">Health Benefits</h2>
           <div className="flex flex-wrap gap-2">
@@ -183,14 +183,12 @@ export function RecipeDetail() {
           </div>
         </div>
 
-        {/* Swap suggestion */}
         <div className="mx-5 mt-4 mb-4 bg-[#F97316]/10 border border-[#F97316]/20 rounded-2xl p-4">
           <p className="text-[#F97316] text-xs font-bold mb-1">💡 SMART SWAP</p>
           <p className="text-white/70 text-xs">{recipe.swap}</p>
         </div>
       </div>
 
-      {/* Sticky bottom */}
       <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-[#1C2B1E]/95 backdrop-blur-xl border-t border-white/5 px-5 py-4 pb-8 flex gap-3">
         <button className="flex-1 bg-[#22C55E] text-white font-semibold py-3.5 rounded-2xl text-sm">
           🛒 Add to Shopping List

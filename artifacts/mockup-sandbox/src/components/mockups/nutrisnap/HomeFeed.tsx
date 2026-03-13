@@ -130,7 +130,6 @@ export function HomeFeed() {
 
   return (
     <div className="min-h-screen bg-[#0F1710] flex flex-col font-sans max-w-[390px] mx-auto relative overflow-hidden">
-      {/* Status bar */}
       <div className="flex justify-between items-center px-6 pt-4 pb-0">
         <span className="text-white/40 text-xs">9:41</span>
         <div className="flex gap-1 items-center">
@@ -139,7 +138,6 @@ export function HomeFeed() {
         </div>
       </div>
 
-      {/* Header */}
       <div className="px-6 pt-3 pb-4">
         <div className="flex items-start justify-between">
           <div>
@@ -153,7 +151,6 @@ export function HomeFeed() {
           </div>
         </div>
 
-        {/* Daily summary pill */}
         <div className="mt-4 bg-[#1C2B1E] rounded-2xl p-4">
           <div className="flex items-center justify-between mb-3">
             <span className="text-white/70 text-sm font-medium">Today's plan</span>
@@ -177,20 +174,17 @@ export function HomeFeed() {
         </div>
       </div>
 
-      {/* Section header */}
       <div className="px-6 flex items-center justify-between mb-3">
         <h2 className="text-white font-bold text-lg">Today's Recipes</h2>
         <button className="text-[#22C55E] text-sm font-semibold">Regenerate</button>
       </div>
 
-      {/* Recipe cards horizontal scroll */}
       <div className="flex gap-4 px-6 overflow-x-auto pb-2 scrollbar-hide">
         {recipes.map((r) => (
           <RecipeCard key={r.id} recipe={r} onClick={() => {}} />
         ))}
       </div>
 
-      {/* NutriChat button */}
       <div className="flex-1" />
       <div className="px-6 py-4">
         <button className="w-full bg-gradient-to-r from-[#22C55E] to-emerald-600 text-white font-semibold py-4 rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-green-900/40">
@@ -199,11 +193,9 @@ export function HomeFeed() {
         </button>
       </div>
 
-      {/* Bottom Nav */}
       <div className="bg-[#1C2B1E]/90 backdrop-blur-xl border-t border-white/5 px-4 py-3 pb-6 flex justify-around">
         {[
           { id: "home", icon: "🏠", label: "Home" },
-          { id: "explore", icon: "🔍", label: "Explore" },
           { id: "shopping", icon: "🛒", label: "Shop" },
           { id: "profile", icon: "👤", label: "Profile" },
         ].map((tab) => (
