@@ -18,12 +18,19 @@ function todayDate(): string {
 }
 
 router.get("/shopping-list", async (req: Request, res: Response) => {
-  const queryParsed = GetShoppingListQueryParams.safeParse(
-    coerceDateFields({ ...req.query }, "date"),
-  );
-  const date = queryParsed.success && queryParsed.data.date
-    ? queryParsed.data.date.toISOString().split("T")[0]
-    : todayDate();
+  let date: string;
+  if (req.query.date) {
+    const queryParsed = GetShoppingListQueryParams.safeParse(
+      coerceDateFields({ ...req.query }, "date"),
+    );
+    if (!queryParsed.success) {
+      res.status(400).json({ error: "Invalid date parameter" });
+      return;
+    }
+    date = queryParsed.data.date!.toISOString().split("T")[0];
+  } else {
+    date = todayDate();
+  }
 
   const [list] = await db
     .select()
