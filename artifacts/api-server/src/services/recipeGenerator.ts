@@ -134,7 +134,7 @@ export async function generateRecipes(
   }
 
   const message = await anthropic.messages.create({
-    model: "claude-sonnet-4-20250514",
+    model: "claude-sonnet-4-5",
     max_tokens: 8192,
     messages: [
       {
