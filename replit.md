@@ -91,12 +91,30 @@ Uses Replit Auth (OpenID Connect with PKCE). Key files:
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)
 
+### `artifacts/mobile-app` (`@workspace/mobile-app`)
+
+Expo React Native mobile app with Expo Router file-based routing, dark theme (#0F1710), and 3-tab navigation (Home, Shop, Profile).
+
+- Screens:
+  - `app/sign-in.tsx` — Sign in with Replit Auth
+  - `app/onboarding.tsx` — 6-step onboarding (diet, allergies, goal, skill, location, targets)
+  - `app/(tabs)/index.tsx` — Home feed (daily recipes, macro rings, streak badge)
+  - `app/(tabs)/shopping.tsx` — Shopping list (grouped by aisle, check-off, bulk actions)
+  - `app/(tabs)/profile.tsx` — Profile (streak milestones, saved recipes, settings)
+  - `app/recipe/[id].tsx` — Recipe detail (hero, macros, ingredients, steps, sticky CTA)
+- Auth: `lib/auth.ts` — OIDC via expo-web-browser + token exchange via `POST /api/mobile-auth/token-exchange`, Bearer token stored in AsyncStorage
+- API: `lib/api.ts` — fetch wrapper with Bearer auth header for all API calls
+- Theme: `constants/colors.ts` — primary #22C55E, accent #F97316, bg #0F1710, card #1C2B1E
+- Tab bar: NativeTabs with liquid glass on iOS 26+, classic Tabs with BlurView fallback
+- `pnpm --filter @workspace/mobile-app run dev` — run the Expo dev server
+
 ## Structure
 
 ```text
 artifacts-monorepo/
 ├── artifacts/              # Deployable applications
-│   └── api-server/         # Express API server
+│   ├── api-server/         # Express API server
+│   └── mobile-app/         # Expo React Native mobile app
 ├── lib/                    # Shared libraries
 │   ├── api-spec/           # OpenAPI spec + Orval codegen config
 │   ├── api-client-react/   # Generated React Query hooks
