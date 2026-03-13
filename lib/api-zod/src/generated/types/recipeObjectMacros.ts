@@ -6,9 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type RecipeObjectIngredientsItem = {
-  name?: string;
-  amount?: string;
-  unit?: string;
-  isKeyIngredient?: boolean;
+export type RecipeObjectMacros = {
+  calories?: number;
+  protein?: number;
+  carbs?: number;
+  fat?: number;
 };

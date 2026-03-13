@@ -6,13 +6,19 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { RecipeObjectIngredientsItem } from "./recipeObjectIngredientsItem";
+import type { RecipeObjectMacros } from "./recipeObjectMacros";
 
 export interface RecipeObject {
+  meal?: string;
   title?: string;
+  emoji?: string;
   description?: string;
   prepTime?: number;
   cookTime?: number;
   servings?: number;
+  healthScore?: number;
+  goalAlignment?: string;
+  macros?: RecipeObjectMacros;
   calories?: number;
   protein?: number;
   carbs?: number;
@@ -20,6 +26,7 @@ export interface RecipeObject {
   ingredients?: RecipeObjectIngredientsItem[];
   steps?: string[];
   healthBenefits?: string[];
+  swapSuggestion?: string;
   tags?: string[];
   /** @nullable */
   imageUrl?: string | null;

@@ -6,10 +6,13 @@ import {
   ToggleShoppingItemResponse,
   UpsertShoppingListBody,
   UpsertShoppingListResponse,
+  GetNearbyStoresQueryParams,
+  GetNearbyStoresResponse,
 } from "@workspace/api-zod";
 import { db, shoppingListsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { coerceDateFields } from "../lib/parseDate";
+import { findNearbyStores } from "../services/storeFinder";
 
 const router: IRouter = Router();
 
@@ -166,6 +169,32 @@ router.patch("/shopping-list/check", async (req: Request, res: Response) => {
       id: list.id,
     }),
   );
+});
+
+router.get("/shopping-list/stores", async (req: Request, res: Response) => {
+  const parsed = GetNearbyStoresQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: "lat and lng query parameters are required" });
+    return;
+  }
+
+  const { lat, lng, radius } = parsed.data;
+
+  let stores;
+  try {
+    stores = await findNearbyStores(lat, lng, radius);
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Unknown store finder error";
+    if (message.includes("GOOGLE_PLACES_API_KEY")) {
+      res.status(503).json({ error: message });
+    } else {
+      res.status(502).json({ error: `Store lookup failed: ${message}` });
+    }
+    return;
+  }
+
+  res.json(GetNearbyStoresResponse.parse({ stores }));
 });
 
 export default router;

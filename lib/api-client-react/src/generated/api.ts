@@ -22,6 +22,7 @@ import type {
   DailyRecipeItem,
   DailyRecipesResponse,
   ErrorEnvelope,
+  GetNearbyStoresParams,
   GetShoppingListParams,
   GetTodayRecipesParams,
   HandleBrowserLoginCallbackParams,
@@ -29,6 +30,7 @@ import type {
   LogoutSuccess,
   MobileTokenExchangeRequest,
   MobileTokenExchangeSuccess,
+  NearbyStoresResponse,
   RegenerateRecipeRequest,
   SaveRecipeRequest,
   SavedRecipeItem,
@@ -1505,6 +1507,100 @@ export const useToggleShoppingItem = <
 > => {
   return useMutation(getToggleShoppingItemMutationOptions(options));
 };
+
+/**
+ * @summary Find nearby grocery stores
+ */
+export const getGetNearbyStoresUrl = (params: GetNearbyStoresParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/shopping-list/stores?${stringifiedParams}`
+    : `/api/shopping-list/stores`;
+};
+
+export const getNearbyStores = async (
+  params: GetNearbyStoresParams,
+  options?: RequestInit,
+): Promise<NearbyStoresResponse> => {
+  return customFetch<NearbyStoresResponse>(getGetNearbyStoresUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetNearbyStoresQueryKey = (params?: GetNearbyStoresParams) => {
+  return [`/api/shopping-list/stores`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetNearbyStoresQueryOptions = <
+  TData = Awaited<ReturnType<typeof getNearbyStores>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(
+  params: GetNearbyStoresParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getNearbyStores>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetNearbyStoresQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getNearbyStores>>> = ({
+    signal,
+  }) => getNearbyStores(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getNearbyStores>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetNearbyStoresQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getNearbyStores>>
+>;
+export type GetNearbyStoresQueryError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Find nearby grocery stores
+ */
+
+export function useGetNearbyStores<
+  TData = Awaited<ReturnType<typeof getNearbyStores>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(
+  params: GetNearbyStoresParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getNearbyStores>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetNearbyStoresQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Log a cooked meal and update streak (48-hour reset)

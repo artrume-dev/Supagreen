@@ -186,11 +186,23 @@ export const GetTodayRecipesResponse = zod.object({
       id: zod.string(),
       mealType: zod.string(),
       recipe: zod.object({
+        meal: zod.string().optional(),
         title: zod.string().optional(),
+        emoji: zod.string().optional(),
         description: zod.string().optional(),
         prepTime: zod.number().optional(),
         cookTime: zod.number().optional(),
         servings: zod.number().optional(),
+        healthScore: zod.number().optional(),
+        goalAlignment: zod.string().optional(),
+        macros: zod
+          .object({
+            calories: zod.number().optional(),
+            protein: zod.number().optional(),
+            carbs: zod.number().optional(),
+            fat: zod.number().optional(),
+          })
+          .optional(),
         calories: zod.number().optional(),
         protein: zod.number().optional(),
         carbs: zod.number().optional(),
@@ -201,11 +213,13 @@ export const GetTodayRecipesResponse = zod.object({
               name: zod.string().optional(),
               amount: zod.string().optional(),
               unit: zod.string().optional(),
+              isKeyIngredient: zod.boolean().optional(),
             }),
           )
           .optional(),
         steps: zod.array(zod.string()).optional(),
         healthBenefits: zod.array(zod.string()).optional(),
+        swapSuggestion: zod.string().optional(),
         tags: zod.array(zod.string()).optional(),
         imageUrl: zod.string().nullish(),
       }),
@@ -237,11 +251,23 @@ export const RegenerateRecipeResponse = zod.object({
   id: zod.string(),
   mealType: zod.string(),
   recipe: zod.object({
+    meal: zod.string().optional(),
     title: zod.string().optional(),
+    emoji: zod.string().optional(),
     description: zod.string().optional(),
     prepTime: zod.number().optional(),
     cookTime: zod.number().optional(),
     servings: zod.number().optional(),
+    healthScore: zod.number().optional(),
+    goalAlignment: zod.string().optional(),
+    macros: zod
+      .object({
+        calories: zod.number().optional(),
+        protein: zod.number().optional(),
+        carbs: zod.number().optional(),
+        fat: zod.number().optional(),
+      })
+      .optional(),
     calories: zod.number().optional(),
     protein: zod.number().optional(),
     carbs: zod.number().optional(),
@@ -252,11 +278,13 @@ export const RegenerateRecipeResponse = zod.object({
           name: zod.string().optional(),
           amount: zod.string().optional(),
           unit: zod.string().optional(),
+          isKeyIngredient: zod.boolean().optional(),
         }),
       )
       .optional(),
     steps: zod.array(zod.string()).optional(),
     healthBenefits: zod.array(zod.string()).optional(),
+    swapSuggestion: zod.string().optional(),
     tags: zod.array(zod.string()).optional(),
     imageUrl: zod.string().nullish(),
   }),
@@ -279,11 +307,23 @@ export const GetSavedRecipesResponse = zod.object({
     zod.object({
       id: zod.string(),
       recipe: zod.object({
+        meal: zod.string().optional(),
         title: zod.string().optional(),
+        emoji: zod.string().optional(),
         description: zod.string().optional(),
         prepTime: zod.number().optional(),
         cookTime: zod.number().optional(),
         servings: zod.number().optional(),
+        healthScore: zod.number().optional(),
+        goalAlignment: zod.string().optional(),
+        macros: zod
+          .object({
+            calories: zod.number().optional(),
+            protein: zod.number().optional(),
+            carbs: zod.number().optional(),
+            fat: zod.number().optional(),
+          })
+          .optional(),
         calories: zod.number().optional(),
         protein: zod.number().optional(),
         carbs: zod.number().optional(),
@@ -294,11 +334,13 @@ export const GetSavedRecipesResponse = zod.object({
               name: zod.string().optional(),
               amount: zod.string().optional(),
               unit: zod.string().optional(),
+              isKeyIngredient: zod.boolean().optional(),
             }),
           )
           .optional(),
         steps: zod.array(zod.string()).optional(),
         healthBenefits: zod.array(zod.string()).optional(),
+        swapSuggestion: zod.string().optional(),
         tags: zod.array(zod.string()).optional(),
         imageUrl: zod.string().nullish(),
       }),
@@ -319,11 +361,23 @@ export const SaveRecipeHeader = zod.object({
 
 export const SaveRecipeBody = zod.object({
   recipeJson: zod.object({
+    meal: zod.string().optional(),
     title: zod.string().optional(),
+    emoji: zod.string().optional(),
     description: zod.string().optional(),
     prepTime: zod.number().optional(),
     cookTime: zod.number().optional(),
     servings: zod.number().optional(),
+    healthScore: zod.number().optional(),
+    goalAlignment: zod.string().optional(),
+    macros: zod
+      .object({
+        calories: zod.number().optional(),
+        protein: zod.number().optional(),
+        carbs: zod.number().optional(),
+        fat: zod.number().optional(),
+      })
+      .optional(),
     calories: zod.number().optional(),
     protein: zod.number().optional(),
     carbs: zod.number().optional(),
@@ -334,11 +388,13 @@ export const SaveRecipeBody = zod.object({
           name: zod.string().optional(),
           amount: zod.string().optional(),
           unit: zod.string().optional(),
+          isKeyIngredient: zod.boolean().optional(),
         }),
       )
       .optional(),
     steps: zod.array(zod.string()).optional(),
     healthBenefits: zod.array(zod.string()).optional(),
+    swapSuggestion: zod.string().optional(),
     tags: zod.array(zod.string()).optional(),
     imageUrl: zod.string().nullish(),
   }),
@@ -455,6 +511,37 @@ export const ToggleShoppingItemResponse = zod.object({
   ),
   date: zod.date(),
   id: zod.string().nullish(),
+});
+
+/**
+ * @summary Find nearby grocery stores
+ */
+export const getNearbyStoresQueryRadiusDefault = 3000;
+
+export const GetNearbyStoresQueryParams = zod.object({
+  lat: zod.coerce.number(),
+  lng: zod.coerce.number(),
+  radius: zod.coerce.number().default(getNearbyStoresQueryRadiusDefault),
+});
+
+export const GetNearbyStoresHeader = zod.object({
+  Authorization: zod
+    .string()
+    .optional()
+    .describe("Opaque session token — `Bearer <sid>`."),
+});
+
+export const GetNearbyStoresResponse = zod.object({
+  stores: zod.array(
+    zod.object({
+      name: zod.string(),
+      address: zod.string(),
+      distance: zod.number(),
+      openNow: zod.boolean().nullish(),
+      mapsLink: zod.string(),
+      rating: zod.number().nullish(),
+    }),
+  ),
 });
 
 /**

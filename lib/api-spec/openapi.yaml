@@ -401,6 +401,44 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
 
+  /shopping-list/stores:
+    get:
+      tags: [shopping]
+      operationId: getNearbyStores
+      summary: Find nearby grocery stores
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+        - name: lat
+          in: query
+          required: true
+          schema:
+            type: number
+        - name: lng
+          in: query
+          required: true
+          schema:
+            type: number
+        - name: radius
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 3000
+      responses:
+        '200':
+          description: Nearby grocery stores
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NearbyStoresResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
   /streak:
     patch:
       tags: [streaks]
@@ -613,7 +651,11 @@ components:
     RecipeObject:
       type: object
       properties:
+        meal:
+          type: string
         title:
+          type: string
+        emoji:
           type: string
         description:
           type: string
@@ -623,6 +665,21 @@ components:
           type: integer
         servings:
           type: integer
+        healthScore:
+          type: integer
+        goalAlignment:
+          type: string
+        macros:
+          type: object
+          properties:
+            calories:
+              type: integer
+            protein:
+              type: integer
+            carbs:
+              type: integer
+            fat:
+              type: integer
         calories:
           type: integer
         protein:
@@ -642,6 +699,8 @@ components:
                 type: string
               unit:
                 type: string
+              isKeyIngredient:
+                type: boolean
         steps:
           type: array
           items:
@@ -650,6 +709,8 @@ components:
           type: array
           items:
             type: string
+        swapSuggestion:
+          type: string
         tags:
           type: array
           items:
@@ -788,6 +849,32 @@ components:
         lastCookedAt:
           type: [string, 'null']
           format: date-time
+
+    NearbyStore:
+      type: object
+      required: [name, address, distance, mapsLink]
+      properties:
+        name:
+          type: string
+        address:
+          type: string
+        distance:
+          type: number
+        openNow:
+          type: [boolean, 'null']
+        mapsLink:
+          type: string
+        rating:
+          type: [number, 'null']
+
+    NearbyStoresResponse:
+      type: object
+      required: [stores]
+      properties:
+        stores:
+          type: array
+          items:
+            $ref: '#/components/schemas/NearbyStore'
 
     UpdateStreakRequest:
       type: object

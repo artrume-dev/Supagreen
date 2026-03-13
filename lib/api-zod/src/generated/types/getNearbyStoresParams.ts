@@ -6,9 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type RecipeObjectIngredientsItem = {
-  name?: string;
-  amount?: string;
-  unit?: string;
-  isKeyIngredient?: boolean;
+export type GetNearbyStoresParams = {
+  lat: number;
+  lng: number;
+  radius?: number;
 };

@@ -15,7 +15,8 @@
     "cors": "^2",
     "drizzle-orm": "catalog:",
     "express": "^5",
-    "openid-client": "^6.8.2"
+    "openid-client": "^6.8.2",
+    "@workspace/integrations-anthropic-ai": "workspace:*"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",

@@ -94,18 +94,31 @@ export interface UserProfileResponse {
   profile: UserProfileData | null;
 }
 
+export type RecipeObjectMacros = {
+  calories?: number;
+  protein?: number;
+  carbs?: number;
+  fat?: number;
+};
+
 export type RecipeObjectIngredientsItem = {
   name?: string;
   amount?: string;
   unit?: string;
+  isKeyIngredient?: boolean;
 };
 
 export interface RecipeObject {
+  meal?: string;
   title?: string;
+  emoji?: string;
   description?: string;
   prepTime?: number;
   cookTime?: number;
   servings?: number;
+  healthScore?: number;
+  goalAlignment?: string;
+  macros?: RecipeObjectMacros;
   calories?: number;
   protein?: number;
   carbs?: number;
@@ -113,6 +126,7 @@ export interface RecipeObject {
   ingredients?: RecipeObjectIngredientsItem[];
   steps?: string[];
   healthBenefits?: string[];
+  swapSuggestion?: string;
   tags?: string[];
   /** @nullable */
   imageUrl?: string | null;
@@ -184,6 +198,21 @@ export interface StreakResponse {
   lastCookedAt?: string | null;
 }
 
+export interface NearbyStore {
+  name: string;
+  address: string;
+  distance: number;
+  /** @nullable */
+  openNow?: boolean | null;
+  mapsLink: string;
+  /** @nullable */
+  rating?: number | null;
+}
+
+export interface NearbyStoresResponse {
+  stores: NearbyStore[];
+}
+
 export interface UpdateStreakRequest {
   recipeId: string;
 }
@@ -209,4 +238,10 @@ export type GetTodayRecipesParams = {
 
 export type GetShoppingListParams = {
   date?: string;
+};
+
+export type GetNearbyStoresParams = {
+  lat: number;
+  lng: number;
+  radius?: number;
 };

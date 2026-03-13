@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, varchar, date, jsonb, timestamp, boolean, index, unique } from "drizzle-orm/pg-core";
+import { pgTable, varchar, date, jsonb, timestamp, boolean, integer, index, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./auth";
@@ -14,6 +14,7 @@ export const dailyRecipesTable = pgTable(
     recipeJson: jsonb("recipe_json").notNull(),
     generatedAt: timestamp("generated_at", { withTimezone: true }).notNull().defaultNow(),
     wasRegenerated: boolean("was_regenerated").notNull().default(false),
+    regenCount: integer("regen_count").notNull().default(0),
   },
   (table) => [
     index("idx_daily_recipes_user_date").on(table.userId, table.date),

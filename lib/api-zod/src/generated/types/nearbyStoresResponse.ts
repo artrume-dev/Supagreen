@@ -5,10 +5,8 @@
  * NutriSnap API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { NearbyStore } from "./nearbyStore";
 
-export type RecipeObjectIngredientsItem = {
-  name?: string;
-  amount?: string;
-  unit?: string;
-  isKeyIngredient?: boolean;
-};
+export interface NearbyStoresResponse {
+  stores: NearbyStore[];
+}

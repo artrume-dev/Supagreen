@@ -52,8 +52,8 @@ All routes mounted at `/api`:
 - `PUT /profile` — upsert profile/onboarding data (protected)
 
 **Recipes**
-- `GET /recipes/today?date=` — get today's recipes, empty array if not yet generated (protected)
-- `POST /recipes/regenerate` — regenerate a specific meal slot (protected, marks wasRegenerated)
+- `GET /recipes/today?date=` — get today's recipes; if none exist for today, auto-generates 3 via Claude AI (protected)
+- `POST /recipes/regenerate` — regenerate a specific meal slot via Claude AI (max 3/day, protected)
 - `GET /saved-recipes` — list saved recipes (protected)
 - `POST /saved-recipes` — save a recipe (protected)
 - `DELETE /saved-recipes/:id` — remove saved recipe (protected)
@@ -62,6 +62,7 @@ All routes mounted at `/api`:
 - `GET /shopping-list?date=` — get shopping list for a date (protected)
 - `PUT /shopping-list` — create or replace shopping list for a date (protected)
 - `PATCH /shopping-list/check` — toggle item checked/unchecked (protected)
+- `GET /shopping-list/stores?lat=&lng=&radius=` — find top 5 nearby grocery stores via Google Places (protected)
 
 **Streaks**
 - `GET /streak` — get current streak data (protected)
@@ -84,6 +85,8 @@ Uses Replit Auth (OpenID Connect with PKCE). Key files:
 - **API framework**: Express 5
 - **Database**: PostgreSQL + Drizzle ORM
 - **Auth**: Replit Auth (openid-client v6)
+- **AI**: Anthropic Claude (claude-sonnet-4-6) via Replit AI Integrations proxy (`@workspace/integrations-anthropic-ai`)
+- **Store Finder**: Google Places API (requires `GOOGLE_PLACES_API_KEY` env var)
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)
@@ -98,6 +101,7 @@ artifacts-monorepo/
 │   ├── api-spec/           # OpenAPI spec + Orval codegen config
 │   ├── api-client-react/   # Generated React Query hooks
 │   ├── api-zod/            # Generated Zod schemas from OpenAPI
+│   ├── integrations-anthropic-ai/  # Anthropic SDK client (Replit AI Integrations proxy)
 │   └── db/                 # Drizzle ORM schema + DB connection
 ├── scripts/                # Utility scripts (single workspace package)
 │   └── src/                # Individual .ts scripts, run via `pnpm --filter @workspace/scripts run <script>`
