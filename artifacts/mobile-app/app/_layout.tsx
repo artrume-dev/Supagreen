@@ -56,11 +56,6 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (isProfileComplete && (inSignIn || inOnboarding)) {
-      router.replace("/(tabs)");
-      return;
-    }
-
     if (inSignIn) {
       router.replace("/(tabs)");
     }

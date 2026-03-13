@@ -19,6 +19,7 @@ import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import {
   getGetTodayRecipesQueryOptions,
+  getGetSavedRecipesQueryOptions,
   useSaveRecipe,
   useUpsertShoppingList,
   getGetSavedRecipesQueryKey,
@@ -95,9 +96,15 @@ export default function RecipeDetailScreen() {
 
   const todayDate = new Date().toISOString().split("T")[0];
 
-  const { data: recipesData, isLoading } = useQuery({
+  const { data: recipesData, isLoading: todayLoading } = useQuery({
     ...getGetTodayRecipesQueryOptions({ date: todayDate }),
   });
+
+  const { data: savedData, isLoading: savedLoading } = useQuery({
+    ...getGetSavedRecipesQueryOptions(),
+  });
+
+  const isLoading = todayLoading && savedLoading;
 
   const saveMutation = useSaveRecipe({
     mutation: {
@@ -122,7 +129,9 @@ export default function RecipeDetailScreen() {
     },
   });
 
-  const recipe = recipesData?.recipes?.find((r) => String(r.id) === String(id));
+  const todayRecipe = recipesData?.recipes?.find((r) => String(r.id) === String(id));
+  const savedRecipe = savedData?.recipes?.find((sr) => String(sr.id) === String(id));
+  const recipe = todayRecipe ?? (savedRecipe ? { id: savedRecipe.id, mealType: "Saved", recipe: savedRecipe.recipe, date: savedRecipe.savedAt } : undefined);
   const recipeData = recipe?.recipe;
 
   const toggleIngredient = (i: number) => {
