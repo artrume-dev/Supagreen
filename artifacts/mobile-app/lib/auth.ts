@@ -140,7 +140,7 @@ export function useAuthProvider(): AuthState {
         body: JSON.stringify({
           code: result.params.code,
           code_verifier: request.codeVerifier,
-          redirect_uri: redirectUri,
+          redirect_uri: request.redirectUri,
           state: request.state,
           nonce: request.extraParams?.nonce,
         }),
