@@ -23,14 +23,13 @@ export default function VideoTemplate() {
 
   return (
     <div className="w-full h-screen bg-black flex items-center justify-center overflow-hidden font-body text-text-primary">
-      {/* 9:16 Portrait Container */}
+      {/* 9:16 Portrait Container — height fills viewport, width derived from aspect ratio */}
       <div 
         className="relative overflow-hidden bg-bg-dark shadow-2xl" 
         style={{ 
-          aspectRatio: '9 / 16', 
-          width: '100%',
-          height: '100%',
-          maxHeight: '100vh'
+          height: '100vh',
+          width: 'calc(100vh * 9 / 16)',
+          maxWidth: '100vw',
         }}
       >
         <PersistentBackground currentScene={currentScene} />

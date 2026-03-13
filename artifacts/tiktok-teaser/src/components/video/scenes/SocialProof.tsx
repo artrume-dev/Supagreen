@@ -1,5 +1,5 @@
-import { motion, useAnimation, useInView } from 'framer-motion';
-import { useEffect, useRef, useState } from 'react';
+import { motion } from 'framer-motion';
+import { useEffect, useState } from 'react';
 
 function Counter({ from, to, suffix, duration }: { from: number, to: number, suffix: string, duration: number }) {
   const [count, setCount] = useState(from);
@@ -41,7 +41,7 @@ export default function SocialProof() {
       className="absolute inset-0 flex flex-col items-center justify-center z-10 px-8 py-12"
       initial={{ x: '100%' }}
       animate={{ x: 0 }}
-      exit={{ x: '-100%', transition: { duration: 0.6, ease: [0.76, 0, 0.24, 1] } }}
+      exit={{ x: '-100%' }}
       transition={{ duration: 0.6, ease: [0.76, 0, 0.24, 1] }}
     >
       <div className="w-full flex flex-col gap-10">

@@ -1,62 +1,46 @@
 import { motion } from 'framer-motion';
-import { sceneTransitions } from '@/lib/video/animations';
 
 export default function HookOpener() {
   const line1 = "YOUR AI";
   const line2 = "CHEF IS";
   const line3 = "HERE.";
 
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1,
-        delayChildren: 0.2,
-      },
-    },
-    exit: {
-      opacity: 0,
-      scale: 1.1,
-      filter: 'blur(10px)',
-      transition: { duration: 0.4, ease: 'circIn' }
-    }
-  };
-
-  const wordVariants = {
-    hidden: { y: 100, opacity: 0, rotateX: -45 },
-    visible: {
-      y: 0,
-      opacity: 1,
-      rotateX: 0,
-      transition: { type: 'spring', stiffness: 300, damping: 20 }
-    }
-  };
-
   return (
     <motion.div
       className="absolute inset-0 flex flex-col items-center justify-center z-10 px-6"
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-      exit="exit"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, scale: 1.1, filter: 'blur(10px)' }}
+      transition={{ duration: 0.4, ease: 'circIn' }}
     >
       <div className="flex flex-col items-center justify-center font-display text-[12vw] leading-[0.85] tracking-tight font-bold uppercase text-center w-full perspective-[1000px]">
         <div className="overflow-hidden w-full pb-2">
-          <motion.div variants={wordVariants} className="text-white">
+          <motion.div
+            initial={{ y: 100, opacity: 0, rotateX: -45 }}
+            animate={{ y: 0, opacity: 1, rotateX: 0 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 20, delay: 0.2 }}
+            className="text-white"
+          >
             {line1}
           </motion.div>
         </div>
         <div className="overflow-hidden w-full pb-2 flex items-center justify-center">
-          <motion.div 
-            variants={wordVariants} 
+          <motion.div
+            initial={{ y: 100, opacity: 0, rotateX: -45 }}
+            animate={{ y: 0, opacity: 1, rotateX: 0 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 20, delay: 0.3 }}
             className="text-primary"
           >
             {line2}
           </motion.div>
         </div>
         <div className="overflow-hidden w-full pb-2">
-          <motion.div variants={wordVariants} className="text-white">
+          <motion.div
+            initial={{ y: 100, opacity: 0, rotateX: -45 }}
+            animate={{ y: 0, opacity: 1, rotateX: 0 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 20, delay: 0.4 }}
+            className="text-white"
+          >
             {line3}
           </motion.div>
         </div>

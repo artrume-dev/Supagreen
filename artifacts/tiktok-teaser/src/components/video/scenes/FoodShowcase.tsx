@@ -1,5 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import gsap from 'gsap';
 
 const IMAGES = [
   {
@@ -24,23 +25,39 @@ const IMAGES = [
 
 export default function FoodShowcase() {
   const [index, setIndex] = useState(0);
+  const progressRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setIndex(0);
-    // 4000ms total. Let's do 1200ms per slide roughly
-    const intervals = [
-      setTimeout(() => setIndex(1), 1300),
-      setTimeout(() => setIndex(2), 2600),
-    ];
-    return () => intervals.forEach(i => clearTimeout(i));
+    const tl = gsap.timeline();
+
+    if (progressRef.current) {
+      tl.fromTo(progressRef.current, { scaleX: 0 }, { scaleX: 1, duration: 1.2, ease: 'power2.out' });
+    }
+
+    tl.call(() => setIndex(1), [], 1.3);
+
+    if (progressRef.current) {
+      tl.fromTo(progressRef.current, { scaleX: 0 }, { scaleX: 1, duration: 1.2, ease: 'power2.out' }, 1.3);
+    }
+
+    tl.call(() => setIndex(2), [], 2.6);
+
+    if (progressRef.current) {
+      tl.fromTo(progressRef.current, { scaleX: 0 }, { scaleX: 1, duration: 1.2, ease: 'power2.out' }, 2.6);
+    }
+
+    return () => { tl.kill(); };
   }, []);
 
   return (
     <motion.div
+      ref={containerRef}
       className="absolute inset-0 z-10 bg-black"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0, scale: 1.1, filter: 'blur(10px)', transition: { duration: 0.5 } }}
+      exit={{ opacity: 0, scale: 1.1, filter: 'blur(10px)' }}
+      transition={{ duration: 0.5 }}
     >
       <AnimatePresence mode="wait">
         <motion.div
@@ -75,16 +92,17 @@ export default function FoodShowcase() {
             >
               {IMAGES[index].word2}
             </motion.div>
-            
-            <motion.div
-              initial={{ scaleX: 0 }}
-              animate={{ scaleX: 1 }}
-              transition={{ delay: 0.6, duration: 0.5 }}
-              className="h-3 w-1/3 bg-white mt-8 rounded-full"
-            />
           </div>
         </motion.div>
       </AnimatePresence>
+
+      <div className="absolute bottom-12 left-1/2 -translate-x-1/2 w-1/3 h-1 bg-white/20 rounded-full overflow-hidden z-20">
+        <div 
+          ref={progressRef}
+          className="h-full bg-white rounded-full origin-left"
+          style={{ transform: 'scaleX(0)' }}
+        />
+      </div>
     </motion.div>
   );
 }

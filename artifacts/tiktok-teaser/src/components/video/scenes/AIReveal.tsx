@@ -1,6 +1,5 @@
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect, useState } from 'react';
-import { sceneTransitions } from '@/lib/video/animations';
 
 export default function AIReveal() {
   const [phase, setPhase] = useState(0);
@@ -18,7 +17,7 @@ export default function AIReveal() {
       className="absolute inset-0 flex flex-col items-center justify-center z-10 p-6"
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
-      exit={{ y: '-100%', opacity: 0, transition: { duration: 0.6, ease: [0.76, 0, 0.24, 1] } }}
+      exit={{ y: '-100%', opacity: 0 }}
       transition={{ duration: 0.6, ease: "circOut" }}
     >
       {/* Top indicator */}
@@ -117,7 +116,3 @@ export default function AIReveal() {
     </motion.div>
   );
 }
-
-// Needed for AnimatePresence inside the component
-import { AnimatePresence as FramerAnimatePresence } from 'framer-motion';
-const AnimatePresence = FramerAnimatePresence;
