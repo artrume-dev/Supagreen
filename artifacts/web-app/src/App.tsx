@@ -22,17 +22,10 @@ const queryClient = new QueryClient({
   },
 });
 
-function ProtectedRoutes() {
+function AppRoute({ component: Component }: { component: React.ComponentType }) {
   return (
     <AppLayout>
-      <Switch>
-        <Route path="/app/onboarding" component={Onboarding} />
-        <Route path="/app" component={Home} />
-        <Route path="/app/recipe/:id" component={RecipeDetail} />
-        <Route path="/app/shopping" component={Shopping} />
-        <Route path="/app/profile" component={Profile} />
-        <Route component={NotFound} />
-      </Switch>
+      <Component />
     </AppLayout>
   );
 }
@@ -41,8 +34,11 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Landing} />
-      <Route path="/app" component={ProtectedRoutes} />
-      <Route path="/app/:rest*" component={ProtectedRoutes} />
+      <Route path="/app" component={() => <AppRoute component={Home} />} />
+      <Route path="/app/onboarding" component={() => <AppRoute component={Onboarding} />} />
+      <Route path="/app/recipe/:id" component={() => <AppRoute component={RecipeDetail} />} />
+      <Route path="/app/shopping" component={() => <AppRoute component={Shopping} />} />
+      <Route path="/app/profile" component={() => <AppRoute component={Profile} />} />
       <Route component={NotFound} />
     </Switch>
   );
