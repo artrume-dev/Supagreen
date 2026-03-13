@@ -1,10 +1,10 @@
 import { Feather, Ionicons } from "@expo/vector-icons";
+import type { ComponentProps } from "react";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import React, { useCallback } from "react";
 import {
-  ActivityIndicator,
   Platform,
   Pressable,
   ScrollView,
@@ -30,26 +30,47 @@ interface RecipeMacros {
 interface Recipe {
   title: string;
   prepTime: number;
+  cookTime?: number;
+  servings?: number;
   healthScore: number;
   macros: RecipeMacros;
-  imageUrl?: string;
-  ingredients: { name: string; amount: string; unit: string }[];
+  calories?: number;
+  protein?: number;
+  carbs?: number;
+  fat?: number;
+  imageUrl?: string | null;
+  ingredients: { name: string; amount: string; unit: string; isKeyIngredient?: boolean }[];
   steps: string[];
-  goalTag?: string;
-  benefits?: string[];
+  goalAlignment?: string;
+  healthBenefits?: string[];
+  swapSuggestion?: string;
+  tags?: string[];
+  emoji?: string;
+  description?: string;
+  meal?: string;
 }
 
 interface DailyRecipe {
   id: number;
   mealType: string;
-  recipeJson: Recipe;
+  recipe: Recipe;
+  date: string;
   wasRegenerated: boolean;
 }
 
 interface StreakData {
   currentStreak: number;
   longestStreak: number;
+  lastCookedAt: string | null;
 }
+
+type IoniconsName = ComponentProps<typeof Ionicons>["name"];
+
+const mealIconMap: Record<string, IoniconsName> = {
+  breakfast: "sunny-outline",
+  lunch: "restaurant-outline",
+  dinner: "moon-outline",
+};
 
 function MacroRing({
   value,
@@ -115,11 +136,7 @@ function RecipeCard({
   mealType: string;
   id: number;
 }) {
-  const mealIcons: Record<string, string> = {
-    breakfast: "sunny-outline",
-    lunch: "restaurant-outline",
-    dinner: "moon-outline",
-  };
+  const iconName = mealIconMap[mealType.toLowerCase()] ?? "restaurant-outline";
 
   return (
     <Pressable
@@ -150,7 +167,7 @@ function RecipeCard({
         <View style={styles.recipeTopRow}>
           <View style={styles.mealBadge}>
             <Ionicons
-              name={mealIcons[mealType] as any || "restaurant-outline"}
+              name={iconName}
               size={12}
               color="#fff"
             />
@@ -168,9 +185,9 @@ function RecipeCard({
           <View style={styles.recipeMetaRow}>
             <Feather name="clock" size={12} color="rgba(255,255,255,0.7)" />
             <Text style={styles.recipeMetaText}>{recipe.prepTime} min</Text>
-            {recipe.goalTag && (
+            {recipe.goalAlignment && (
               <View style={styles.goalTagBadge}>
-                <Text style={styles.goalTagText}>{recipe.goalTag}</Text>
+                <Text style={styles.goalTagText} numberOfLines={1}>{recipe.goalAlignment}</Text>
               </View>
             )}
           </View>
@@ -260,11 +277,11 @@ export default function HomeScreen() {
   const recipes = recipesData?.recipes || [];
 
   const totalCals = recipes.reduce(
-    (s, r) => s + (r.recipeJson.macros?.calories || 0),
+    (s, r) => s + (r.recipe.macros?.calories || 0),
     0
   );
   const totalProtein = recipes.reduce(
-    (s, r) => s + (r.recipeJson.macros?.protein || 0),
+    (s, r) => s + (r.recipe.macros?.protein || 0),
     0
   );
 
@@ -277,6 +294,7 @@ export default function HomeScreen() {
 
   const firstName = user?.firstName || "there";
   const streak = streakData?.currentStreak || 0;
+  const calPct = Math.min((totalCals / 2000) * 100, 100);
 
   return (
     <View style={[styles.container, { paddingTop: isWeb ? 67 : insets.top }]}>
@@ -325,9 +343,7 @@ export default function HomeScreen() {
                   end={{ x: 1, y: 0 }}
                   style={[
                     styles.calBarFill,
-                    {
-                      width: `${Math.min((totalCals / 2000) * 100, 100)}%` as any,
-                    },
+                    { width: `${calPct}%` },
                   ]}
                 />
               </View>
@@ -381,7 +397,7 @@ export default function HomeScreen() {
             {recipes.map((r) => (
               <RecipeCard
                 key={r.id}
-                recipe={r.recipeJson}
+                recipe={r.recipe}
                 mealType={r.mealType}
                 id={r.id}
               />
@@ -632,6 +648,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 10,
+    maxWidth: 120,
   },
   goalTagText: {
     fontSize: 10,

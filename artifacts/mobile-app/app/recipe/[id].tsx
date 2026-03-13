@@ -4,7 +4,6 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useState } from "react";
 import {
-  ActivityIndicator,
   Platform,
   Pressable,
   ScrollView,
@@ -16,10 +15,9 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
-import Svg, { Rect } from "react-native-svg";
 
 import Colors from "@/constants/colors";
-import { apiGet, apiPost } from "@/lib/api";
+import { apiGet, apiPost, apiPut } from "@/lib/api";
 
 interface RecipeMacros {
   calories: number;
@@ -32,28 +30,38 @@ interface Ingredient {
   name: string;
   amount: string;
   unit: string;
-  isKey?: boolean;
+  isKeyIngredient?: boolean;
 }
 
 interface Recipe {
+  meal?: string;
   title: string;
+  emoji?: string;
+  description?: string;
   prepTime: number;
+  cookTime?: number;
   servings?: number;
   healthScore: number;
   macros: RecipeMacros;
-  imageUrl?: string;
+  calories?: number;
+  protein?: number;
+  carbs?: number;
+  fat?: number;
+  imageUrl?: string | null;
   ingredients: Ingredient[];
   steps: string[];
-  goalTag?: string;
   goalAlignment?: string;
-  benefits?: string[];
-  swap?: string;
+  healthBenefits?: string[];
+  swapSuggestion?: string;
+  tags?: string[];
 }
 
 interface DailyRecipe {
   id: number;
   mealType: string;
-  recipeJson: Recipe;
+  recipe: Recipe;
+  date: string;
+  wasRegenerated: boolean;
 }
 
 function MacroBar({
@@ -68,6 +76,7 @@ function MacroBar({
   color: string;
 }) {
   const pct = Math.min(value / max, 1);
+  const widthPct = `${pct * 100}%`;
   return (
     <View style={{ flex: 1, alignItems: "center" }}>
       <Text style={mbStyles.value}>{value}g</Text>
@@ -76,7 +85,7 @@ function MacroBar({
         <View
           style={[
             mbStyles.barFill,
-            { width: `${pct * 100}%` as any, backgroundColor: color },
+            { width: widthPct, backgroundColor: color },
           ]}
         />
       </View>
@@ -133,7 +142,7 @@ export default function RecipeDetailScreen() {
   );
 
   const saveMutation = useMutation({
-    mutationFn: (body: { recipeJson: Recipe }) =>
+    mutationFn: (body: { recipe: Recipe }) =>
       apiPost("/api/saved-recipes", body),
     onSuccess: () => {
       setIsSaved(true);
@@ -142,8 +151,21 @@ export default function RecipeDetailScreen() {
     },
   });
 
+  const addToShopMutation = useMutation({
+    mutationFn: (body: { date: string; items: { name: string; amount: string; unit: string; category: string }[] }) =>
+      apiPut("/api/shopping-list", body),
+    onSuccess: () => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      queryClient.invalidateQueries({ queryKey: ["shoppingList"] });
+      Alert.alert("Added", "Ingredients added to your shopping list");
+    },
+    onError: () => {
+      Alert.alert("Error", "Could not add to shopping list");
+    },
+  });
+
   const recipe = recipesData?.recipes?.find((r) => String(r.id) === String(id));
-  const recipeData = recipe?.recipeJson;
+  const recipeData = recipe?.recipe;
 
   const toggleIngredient = (i: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -163,10 +185,25 @@ export default function RecipeDetailScreen() {
     });
   };
 
+  const handleAddToShop = () => {
+    if (!recipeData) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const shopItems = recipeData.ingredients.map((ing) => ({
+      name: ing.name,
+      amount: ing.amount,
+      unit: ing.unit,
+      category: ing.isKeyIngredient ? "Protein" : "Pantry",
+    }));
+    addToShopMutation.mutate({ date: todayDate, items: shopItems });
+  };
+
   if (isLoading) {
     return (
       <View style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+        <View style={{ alignItems: "center", gap: 8 }}>
+          <Ionicons name="restaurant" size={32} color={Colors.textTertiary} />
+          <Text style={styles.notFoundText}>Loading recipe...</Text>
+        </View>
       </View>
     );
   }
@@ -216,7 +253,7 @@ export default function RecipeDetailScreen() {
             <Pressable
               onPress={() => {
                 if (!isSaved && recipeData) {
-                  saveMutation.mutate({ recipeJson: recipeData });
+                  saveMutation.mutate({ recipe: recipeData });
                 }
               }}
               style={styles.heroButton}
@@ -334,7 +371,7 @@ export default function RecipeDetailScreen() {
                   ]}
                 >
                   {ing.name}
-                  {ing.isKey && (
+                  {ing.isKeyIngredient && (
                     <Text style={{ color: Colors.primary }}> *</Text>
                   )}
                 </Text>
@@ -383,11 +420,11 @@ export default function RecipeDetailScreen() {
           </View>
         </View>
 
-        {recipeData.benefits && recipeData.benefits.length > 0 && (
+        {recipeData.healthBenefits && recipeData.healthBenefits.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Health Benefits</Text>
             <View style={styles.benefitsGrid}>
-              {recipeData.benefits.map((b, i) => (
+              {recipeData.healthBenefits.map((b, i) => (
                 <View key={i} style={styles.benefitChip}>
                   <Feather name="check-circle" size={12} color={Colors.primary} />
                   <Text style={styles.benefitText}>{b}</Text>
@@ -397,12 +434,12 @@ export default function RecipeDetailScreen() {
           </View>
         )}
 
-        {recipeData.swap && (
+        {recipeData.swapSuggestion && (
           <View style={styles.swapCard}>
             <Feather name="refresh-cw" size={14} color={Colors.accent} />
             <View style={{ flex: 1 }}>
               <Text style={styles.swapTitle}>SMART SWAP</Text>
-              <Text style={styles.swapDesc}>{recipeData.swap}</Text>
+              <Text style={styles.swapDesc}>{recipeData.swapSuggestion}</Text>
             </View>
           </View>
         )}
@@ -415,10 +452,8 @@ export default function RecipeDetailScreen() {
         ]}
       >
         <Pressable
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            Alert.alert("Added", "Ingredients added to shopping list");
-          }}
+          onPress={handleAddToShop}
+          disabled={addToShopMutation.isPending}
           style={({ pressed }) => [
             styles.addToShopButton,
             pressed && { transform: [{ scale: 0.98 }] },
@@ -437,7 +472,7 @@ export default function RecipeDetailScreen() {
         <Pressable
           onPress={() => {
             if (!isSaved && recipeData) {
-              saveMutation.mutate({ recipeJson: recipeData });
+              saveMutation.mutate({ recipe: recipeData });
             }
           }}
           style={styles.shareButton}

@@ -1,10 +1,10 @@
 import { Feather, Ionicons } from "@expo/vector-icons";
+import type { ComponentProps } from "react";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
-  ActivityIndicator,
   Platform,
   Pressable,
   ScrollView,
@@ -14,39 +14,145 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
+import Svg, { Rect, Text as SvgText } from "react-native-svg";
 
 import Colors from "@/constants/colors";
 import { useAuth } from "@/lib/auth";
 import { apiGet } from "@/lib/api";
 
 interface ProfileData {
-  id: number;
-  dietType: string;
-  healthGoal: string;
-  skillLevel: string;
-  caloriesTarget: number;
+  profile: {
+    userId: string;
+    dietType: string | null;
+    allergies: string[];
+    healthGoal: string | null;
+    skillLevel: string | null;
+    caloriesTarget: number | null;
+    city: string | null;
+    country: string | null;
+    createdAt: string;
+    updatedAt: string;
+  } | null;
 }
 
 interface StreakData {
   currentStreak: number;
   longestStreak: number;
+  lastCookedAt: string | null;
 }
 
 interface SavedRecipe {
   id: number;
-  recipeJson: {
+  recipe: {
     title: string;
-    macros: { calories: number; protein: number };
-    imageUrl?: string;
+    macros: { calories: number; protein: number; carbs: number; fat: number };
+    imageUrl?: string | null;
   };
+  savedAt: string;
 }
 
-const milestones = [
-  { days: 3, icon: "sprout" as const, label: "Sprout" },
-  { days: 7, icon: "flame" as const, label: "On Fire" },
-  { days: 14, icon: "flash" as const, label: "Charged" },
-  { days: 30, icon: "trophy" as const, label: "Champion" },
+interface DailyRecipe {
+  id: number;
+  mealType: string;
+  recipe: {
+    macros: { calories: number; protein: number; carbs: number; fat: number };
+  };
+  date: string;
+}
+
+type IoniconsName = ComponentProps<typeof Ionicons>["name"];
+type FeatherName = ComponentProps<typeof Feather>["name"];
+
+const milestones: { days: number; icon: IoniconsName; label: string }[] = [
+  { days: 3, icon: "leaf", label: "Sprout" },
+  { days: 7, icon: "flame", label: "On Fire" },
+  { days: 14, icon: "flash", label: "Charged" },
+  { days: 30, icon: "trophy", label: "Champion" },
 ];
+
+const BAR_COLORS = [
+  Colors.primary,
+  "#4ADE80",
+  Colors.accent,
+  "#FB923C",
+  Colors.blue,
+  "#818CF8",
+  Colors.primary,
+];
+
+function WeeklyMacroChart({ recipes }: { recipes: DailyRecipe[] }) {
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    return d.toISOString().split("T")[0];
+  });
+
+  const dayLabels = days.map((d) => {
+    const date = new Date(d + "T12:00:00");
+    return date.toLocaleDateString("en-US", { weekday: "short" }).slice(0, 2);
+  });
+
+  const dailyCals = days.map((date) => {
+    const dayRecipes = recipes.filter((r) => r.date.startsWith(date));
+    return dayRecipes.reduce((s, r) => s + (r.recipe.macros?.calories || 0), 0);
+  });
+
+  const maxCal = Math.max(...dailyCals, 1);
+  const chartH = 100;
+  const barW = 24;
+  const gap = 12;
+  const chartW = days.length * (barW + gap);
+
+  return (
+    <View style={chartStyles.container}>
+      <Text style={chartStyles.title}>Weekly Calories</Text>
+      <Svg width={chartW} height={chartH + 20} viewBox={`0 0 ${chartW} ${chartH + 20}`}>
+        {dailyCals.map((cal, i) => {
+          const h = maxCal > 0 ? (cal / maxCal) * chartH : 0;
+          const x = i * (barW + gap);
+          return (
+            <React.Fragment key={i}>
+              <Rect
+                x={x}
+                y={chartH - h}
+                width={barW}
+                height={Math.max(h, 2)}
+                rx={6}
+                fill={BAR_COLORS[i % BAR_COLORS.length]}
+                opacity={cal > 0 ? 1 : 0.2}
+              />
+              <SvgText
+                x={x + barW / 2}
+                y={chartH + 14}
+                textAnchor="middle"
+                fontSize={9}
+                fill={Colors.textTertiary}
+              >
+                {dayLabels[i]}
+              </SvgText>
+            </React.Fragment>
+          );
+        })}
+      </Svg>
+    </View>
+  );
+}
+
+const chartStyles = StyleSheet.create({
+  container: {
+    backgroundColor: Colors.card,
+    borderRadius: 16,
+    padding: 16,
+    alignItems: "center",
+    gap: 12,
+  },
+  title: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.text,
+    alignSelf: "flex-start",
+  },
+});
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -54,7 +160,7 @@ export default function ProfileScreen() {
   const { user, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<"stats" | "saved">("stats");
 
-  const { data: profileData } = useQuery<ProfileData>({
+  const { data: profileResponse } = useQuery<ProfileData>({
     queryKey: ["profile"],
     queryFn: () => apiGet("/api/profile"),
   });
@@ -69,9 +175,28 @@ export default function ProfileScreen() {
     queryFn: () => apiGet("/api/saved-recipes"),
   });
 
+  const { data: weekRecipesData } = useQuery<{ recipes: DailyRecipe[] }>({
+    queryKey: ["weekRecipes"],
+    queryFn: async () => {
+      const promises = Array.from({ length: 7 }, (_, i) => {
+        const d = new Date();
+        d.setDate(d.getDate() - (6 - i));
+        const dateStr = d.toISOString().split("T")[0];
+        return apiGet<{ recipes: DailyRecipe[] }>(`/api/recipes/today?date=${dateStr}`)
+          .then((r) => r.recipes || [])
+          .catch(() => [] as DailyRecipe[]);
+      });
+      const allRecipes = (await Promise.all(promises)).flat();
+      return { recipes: allRecipes };
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const profileData = profileResponse?.profile;
   const streak = streakData?.currentStreak || 0;
   const longestStreak = streakData?.longestStreak || 0;
   const savedRecipes = savedData?.recipes || [];
+  const weekRecipes = weekRecipesData?.recipes || [];
 
   const displayName =
     user?.firstName && user?.lastName
@@ -89,6 +214,24 @@ export default function ProfileScreen() {
         .replace(/_/g, " ")
         .replace(/\b\w/g, (c) => c.toUpperCase())
     : "Not set";
+
+  const statsItems: { label: string; value: string; icon: FeatherName }[] = [
+    { label: "Saved", value: String(savedRecipes.length), icon: "heart" },
+    {
+      label: "Target",
+      value: profileData?.caloriesTarget
+        ? `${profileData.caloriesTarget}`
+        : "2000",
+      icon: "target",
+    },
+    {
+      label: "Skill",
+      value: profileData?.skillLevel
+        ? profileData.skillLevel.charAt(0).toUpperCase() + profileData.skillLevel.slice(1)
+        : "—",
+      icon: "bar-chart-2",
+    },
+  ];
 
   return (
     <View style={[styles.container, { paddingTop: isWeb ? 67 : insets.top }]}>
@@ -165,7 +308,7 @@ export default function ProfileScreen() {
                   ]}
                 >
                   <Ionicons
-                    name={m.icon as any}
+                    name={m.icon}
                     size={24}
                     color={achieved ? Colors.primary : Colors.textTertiary}
                   />
@@ -186,20 +329,10 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.statsStrip}>
-          {[
-            { label: "Saved", value: String(savedRecipes.length), icon: "heart" },
-            {
-              label: "Target",
-              value: profileData?.caloriesTarget
-                ? `${profileData.caloriesTarget}`
-                : "2000",
-              icon: "target",
-            },
-            { label: "Skill", value: profileData?.skillLevel || "—", icon: "bar-chart-2" },
-          ].map((stat) => (
+          {statsItems.map((stat) => (
             <View key={stat.label} style={styles.statCard}>
               <Feather
-                name={stat.icon as any}
+                name={stat.icon}
                 size={18}
                 color={Colors.primary}
               />
@@ -259,20 +392,20 @@ export default function ProfileScreen() {
                 </Text>
               </View>
             ) : (
-              savedRecipes.map((recipe) => (
+              savedRecipes.map((sr) => (
                 <Pressable
-                  key={recipe.id}
+                  key={sr.id}
                   onPress={() =>
                     router.push({
                       pathname: "/recipe/[id]",
-                      params: { id: String(recipe.id) },
+                      params: { id: String(sr.id) },
                     })
                   }
                   style={styles.savedCard}
                 >
-                  {recipe.recipeJson.imageUrl ? (
+                  {sr.recipe.imageUrl ? (
                     <Image
-                      source={{ uri: recipe.recipeJson.imageUrl }}
+                      source={{ uri: sr.recipe.imageUrl }}
                       style={styles.savedImage}
                       contentFit="cover"
                     />
@@ -289,10 +422,10 @@ export default function ProfileScreen() {
                   )}
                   <View style={{ flex: 1 }}>
                     <Text style={styles.savedTitle}>
-                      {recipe.recipeJson.title}
+                      {sr.recipe.title}
                     </Text>
                     <Text style={styles.savedMeta}>
-                      {recipe.recipeJson.macros.calories} kcal
+                      {sr.recipe.macros.calories} kcal
                     </Text>
                   </View>
                   <View style={styles.savedHeart}>
@@ -304,6 +437,8 @@ export default function ProfileScreen() {
           </View>
         ) : (
           <View style={styles.overviewSection}>
+            <WeeklyMacroChart recipes={weekRecipes} />
+
             <View style={styles.infoCard}>
               <View style={styles.infoRow}>
                 <Feather name="target" size={16} color={Colors.primary} />

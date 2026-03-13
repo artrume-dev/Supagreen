@@ -1,6 +1,7 @@
 import { Feather, Ionicons } from "@expo/vector-icons";
+import type { ComponentProps } from "react";
 import { LinearGradient } from "expo-linear-gradient";
-import React, { useState } from "react";
+import React from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -23,24 +24,37 @@ interface ShoppingItem {
   name: string;
   amount: string;
   unit: string;
-  aisle: string;
-  recipeTitle?: string;
+  category: string;
+  checked: boolean;
 }
 
 interface ShoppingListData {
-  id: number;
+  id: number | null;
   date: string;
-  itemsJson: ShoppingItem[];
-  checkedItems: string[];
+  items: ShoppingItem[];
 }
 
 interface StoreData {
+  id: string;
   name: string;
   address: string;
-  rating: number;
-  distance?: number;
-  isOpen?: boolean;
+  lat: number;
+  lng: number;
+  rating: number | null;
+  openNow: boolean | null;
+  distance: number | null;
 }
+
+type IoniconsName = ComponentProps<typeof Ionicons>["name"];
+
+const categoryIconMap: Record<string, IoniconsName> = {
+  Produce: "leaf",
+  Protein: "nutrition",
+  "Grains & Legumes": "grid",
+  Pantry: "cube",
+  Dairy: "water",
+};
+const defaultCategoryIcon: IoniconsName = "ellipsis-horizontal";
 
 export default function ShoppingScreen() {
   const insets = useSafeAreaInsets();
@@ -53,33 +67,42 @@ export default function ShoppingScreen() {
     queryFn: () => apiGet(`/api/shopping-list?date=${todayDate}`),
   });
 
+  const { data: storesData } = useQuery<{ stores: StoreData[] }>({
+    queryKey: ["nearbyStores"],
+    queryFn: () => apiGet("/api/shopping-list/stores"),
+  });
+
   const toggleMutation = useMutation({
-    mutationFn: (body: { date: string; itemName: string }) =>
+    mutationFn: (body: { date: string; itemName: string; checked: boolean }) =>
       apiPatch("/api/shopping-list/check", body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["shoppingList"] });
     },
   });
 
-  const items = shoppingData?.itemsJson || [];
-  const checkedItems = new Set(shoppingData?.checkedItems || []);
+  const items = shoppingData?.items || [];
+  const stores = storesData?.stores || [];
 
   const grouped = items.reduce(
     (acc, item) => {
-      const aisle = item.aisle || "Other";
-      if (!acc[aisle]) acc[aisle] = [];
-      acc[aisle].push(item);
+      const cat = item.category || "Other";
+      if (!acc[cat]) acc[cat] = [];
+      acc[cat].push(item);
       return acc;
     },
     {} as Record<string, ShoppingItem[]>
   );
 
   const totalItems = items.length;
-  const checkedCount = items.filter((i) => checkedItems.has(i.name)).length;
+  const checkedCount = items.filter((i) => i.checked).length;
 
-  const handleToggle = async (itemName: string) => {
+  const handleToggle = async (item: ShoppingItem) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    toggleMutation.mutate({ date: todayDate, itemName });
+    toggleMutation.mutate({
+      date: todayDate,
+      itemName: item.name,
+      checked: !item.checked,
+    });
   };
 
   const handleCopyAll = async () => {
@@ -87,15 +110,6 @@ export default function ShoppingScreen() {
     await Clipboard.setStringAsync(text);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     Alert.alert("Copied", "Shopping list copied to clipboard");
-  };
-
-  const aisleIcons: Record<string, string> = {
-    Produce: "leaf",
-    Protein: "nutrition",
-    "Grains & Legumes": "grid",
-    Pantry: "cube",
-    Dairy: "water",
-    Other: "ellipsis-horizontal",
   };
 
   if (isLoading) {
@@ -108,6 +122,8 @@ export default function ShoppingScreen() {
       </View>
     );
   }
+
+  const progressPct = totalItems > 0 ? (checkedCount / totalItems) * 100 : 0;
 
   return (
     <View style={[styles.container, { paddingTop: isWeb ? 67 : insets.top }]}>
@@ -132,11 +148,7 @@ export default function ShoppingScreen() {
               end={{ x: 1, y: 0 }}
               style={[
                 styles.progressFill,
-                {
-                  width: totalItems > 0
-                    ? `${(checkedCount / totalItems) * 100}%` as any
-                    : "0%",
-                },
+                { width: `${progressPct}%` },
               ]}
             />
           </View>
@@ -169,70 +181,93 @@ export default function ShoppingScreen() {
               </Pressable>
             </View>
 
-            {Object.entries(grouped).map(([aisle, aisleItems]) => {
-              const aisleChecked = aisleItems.filter((i) =>
-                checkedItems.has(i.name)
-              ).length;
+            {Object.entries(grouped).map(([category, catItems]) => {
+              const catChecked = catItems.filter((i) => i.checked).length;
+              const iconName = categoryIconMap[category] ?? defaultCategoryIcon;
               return (
-                <View key={aisle} style={styles.aisleSection}>
+                <View key={category} style={styles.aisleSection}>
                   <View style={styles.aisleHeader}>
                     <View style={styles.aisleIconContainer}>
                       <Ionicons
-                        name={aisleIcons[aisle] as any || "ellipsis-horizontal"}
+                        name={iconName}
                         size={16}
                         color={Colors.primary}
                       />
                     </View>
-                    <Text style={styles.aisleTitle}>{aisle}</Text>
+                    <Text style={styles.aisleTitle}>{category}</Text>
                     <Text style={styles.aisleCount}>
-                      {aisleChecked}/{aisleItems.length}
+                      {catChecked}/{catItems.length}
                     </Text>
                   </View>
-                  {aisleItems.map((item, idx) => {
-                    const isChecked = checkedItems.has(item.name);
-                    return (
-                      <Pressable
-                        key={`${aisle}-${idx}`}
-                        onPress={() => handleToggle(item.name)}
+                  {catItems.map((item, idx) => (
+                    <Pressable
+                      key={`${category}-${idx}`}
+                      onPress={() => handleToggle(item)}
+                      style={[
+                        styles.itemRow,
+                        item.checked && styles.itemRowChecked,
+                      ]}
+                    >
+                      <View
                         style={[
-                          styles.itemRow,
-                          isChecked && styles.itemRowChecked,
+                          styles.checkbox,
+                          item.checked && styles.checkboxChecked,
                         ]}
                       >
-                        <View
+                        {item.checked && (
+                          <Feather name="check" size={12} color="#fff" />
+                        )}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text
                           style={[
-                            styles.checkbox,
-                            isChecked && styles.checkboxChecked,
+                            styles.itemName,
+                            item.checked && styles.itemNameChecked,
                           ]}
                         >
-                          {isChecked && (
-                            <Feather name="check" size={12} color="#fff" />
-                          )}
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text
-                            style={[
-                              styles.itemName,
-                              isChecked && styles.itemNameChecked,
-                            ]}
-                          >
-                            {item.name}
-                          </Text>
-                          {item.recipeTitle && (
-                            <Text style={styles.itemRecipe}>
-                              {item.recipeTitle}
-                            </Text>
-                          )}
-                        </View>
-                        <Text style={styles.itemAmount}>
-                          {item.amount} {item.unit}
+                          {item.name}
                         </Text>
-                      </Pressable>
-                    );
-                  })}
+                      </View>
+                      <Text style={styles.itemAmount}>
+                        {item.amount} {item.unit}
+                      </Text>
+                    </Pressable>
+                  ))}
                 </View>
               );
             })}
+
+            {stores.length > 0 && (
+              <View style={styles.storesSection}>
+                <Text style={styles.storesSectionTitle}>Nearby Stores</Text>
+                {stores.slice(0, 3).map((store) => (
+                  <View key={store.id} style={styles.storeCard}>
+                    <View style={styles.storeIconContainer}>
+                      <Ionicons name="storefront" size={18} color={Colors.primary} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.storeName}>{store.name}</Text>
+                      <Text style={styles.storeAddress} numberOfLines={1}>
+                        {store.address}
+                      </Text>
+                    </View>
+                    <View style={styles.storeRight}>
+                      {store.rating != null && (
+                        <View style={styles.ratingBadge}>
+                          <Feather name="star" size={10} color={Colors.accent} />
+                          <Text style={styles.ratingText}>{store.rating.toFixed(1)}</Text>
+                        </View>
+                      )}
+                      {store.openNow != null && (
+                        <Text style={[styles.openText, { color: store.openNow ? Colors.primary : Colors.error }]}>
+                          {store.openNow ? "Open" : "Closed"}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
           </>
         )}
       </ScrollView>
@@ -402,15 +437,67 @@ const styles = StyleSheet.create({
     textDecorationLine: "line-through",
     color: Colors.textTertiary,
   },
-  itemRecipe: {
-    fontSize: 11,
-    fontFamily: "Inter_400Regular",
-    color: Colors.textTertiary,
-    marginTop: 2,
-  },
   itemAmount: {
     fontSize: 12,
     fontFamily: "Inter_500Medium",
     color: Colors.textTertiary,
+  },
+  storesSection: {
+    paddingHorizontal: 20,
+    marginTop: 8,
+    marginBottom: 20,
+  },
+  storesSectionTitle: {
+    fontSize: 16,
+    fontFamily: "Inter_700Bold",
+    color: Colors.text,
+    marginBottom: 12,
+  },
+  storeCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: Colors.card,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginBottom: 8,
+  },
+  storeIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "rgba(34,197,94,0.15)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  storeName: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.text,
+  },
+  storeAddress: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  storeRight: {
+    alignItems: "flex-end",
+    gap: 4,
+  },
+  ratingBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+  },
+  ratingText: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.text,
+  },
+  openText: {
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
   },
 });
