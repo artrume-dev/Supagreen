@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AuthRequest, makeRedirectUri } from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { Alert, Platform } from "react-native";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -104,19 +105,34 @@ export function useAuthProvider(): AuthState {
       const apiBase = getApiBase();
       const replId = process.env.EXPO_PUBLIC_REPL_ID || "";
 
+      if (!replId) {
+        Alert.alert("Login Error", "App is not configured correctly (missing REPL_ID). Please try again later.");
+        return;
+      }
+
+      if (!apiBase) {
+        Alert.alert("Login Error", "App is not configured correctly (missing API domain). Please try again later.");
+        return;
+      }
+
       const request = new AuthRequest({
         clientId: replId,
         redirectUri,
-        scopes: ["openid", "email", "profile", "offline_access"],
+        scopes: ["openid", "email", "profile"],
         usePKCE: true,
-        extraParams: {
-          prompt: "login consent",
-        },
       });
 
       const result = await request.promptAsync(discovery);
 
-      if (result.type !== "success" || !result.params?.code) return;
+      if (result.type === "cancel" || result.type === "dismiss") {
+        return;
+      }
+
+      if (result.type !== "success" || !result.params?.code) {
+        const msg = (result as unknown as { error?: string })?.error ?? result.type;
+        Alert.alert("Login Failed", `Authentication was not completed (${msg}). Please try again.`);
+        return;
+      }
 
       const exchangeRes = await fetch(`${apiBase}/api/mobile-auth/token-exchange`, {
         method: "POST",
@@ -130,16 +146,24 @@ export function useAuthProvider(): AuthState {
         }),
       });
 
-      if (exchangeRes.ok) {
-        const data = await exchangeRes.json();
-        if (data.token) {
-          await AsyncStorage.setItem(TOKEN_KEY, data.token);
-          setToken(data.token);
-          await fetchUser(data.token);
-        }
+      if (!exchangeRes.ok) {
+        const body = await exchangeRes.text().catch(() => "");
+        console.error("Token exchange failed:", exchangeRes.status, body);
+        Alert.alert("Login Failed", "Could not complete sign-in. Please try again.");
+        return;
+      }
+
+      const data = await exchangeRes.json();
+      if (data.token) {
+        await AsyncStorage.setItem(TOKEN_KEY, data.token);
+        setToken(data.token);
+        await fetchUser(data.token);
+      } else {
+        Alert.alert("Login Failed", "No session token returned. Please try again.");
       }
     } catch (e) {
       console.error("Sign in error:", e);
+      Alert.alert("Login Error", `Something went wrong: ${(e as Error).message ?? "Unknown error"}`);
     }
   }, [fetchUser, redirectUri]);
 

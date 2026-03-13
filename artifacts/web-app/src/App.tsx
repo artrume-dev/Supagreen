@@ -41,7 +41,8 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Landing} />
-      <Route path="/app/*" component={ProtectedRoutes} />
+      <Route path="/app" component={ProtectedRoutes} />
+      <Route path="/app/:rest*" component={ProtectedRoutes} />
       <Route component={NotFound} />
     </Switch>
   );
