@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { Home, ShoppingCart, User, PlusCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useGetCurrentUser, useGetProfile } from "@workspace/api-client-react";
+import { useGetCurrentUser, useGetProfile, getGetProfileQueryKey } from "@workspace/api-client-react";
 import { FullPageLoader } from "../ui/spinner";
 import { useEffect } from "react";
 
@@ -15,7 +15,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
   const { data: authData, isLoading: authLoading } = useGetCurrentUser();
   const { data: profileData, isLoading: profileLoading } = useGetProfile({
-    query: { enabled: !!authData?.user }
+    query: { queryKey: getGetProfileQueryKey(), enabled: !!authData?.user }
   });
 
   useEffect(() => {
