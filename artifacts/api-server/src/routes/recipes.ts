@@ -1,14 +1,17 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import {
+  GetTodayRecipesQueryParams,
   GetTodayRecipesResponse,
   GetSavedRecipesResponse,
   SaveRecipeBody,
+  DeleteSavedRecipeParams,
   DeleteSavedRecipeResponse,
   RegenerateRecipeBody,
   RegenerateRecipeResponse,
 } from "@workspace/api-zod";
 import { db, dailyRecipesTable, savedRecipesTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
+import { coerceDateFields } from "../lib/parseDate";
 
 const router: IRouter = Router();
 
@@ -17,19 +20,19 @@ function todayDate(): string {
 }
 
 router.get("/recipes/today", async (req: Request, res: Response) => {
-  if (!req.isAuthenticated()) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-
-  const date = (req.query.date as string) || todayDate();
+  const queryParsed = GetTodayRecipesQueryParams.safeParse(
+    coerceDateFields({ ...req.query }, "date"),
+  );
+  const date = queryParsed.success && queryParsed.data.date
+    ? queryParsed.data.date.toISOString().split("T")[0]
+    : todayDate();
 
   const recipes = await db
     .select()
     .from(dailyRecipesTable)
     .where(
       and(
-        eq(dailyRecipesTable.userId, req.user.id),
+        eq(dailyRecipesTable.userId, req.user!.id),
         eq(dailyRecipesTable.date, date),
       ),
     );
@@ -49,21 +52,17 @@ router.get("/recipes/today", async (req: Request, res: Response) => {
 });
 
 router.post("/recipes/regenerate", async (req: Request, res: Response) => {
-  if (!req.isAuthenticated()) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-
-  const parsed = RegenerateRecipeBody.safeParse(req.body);
+  const parsed = RegenerateRecipeBody.safeParse(
+    coerceDateFields({ ...req.body }, "date"),
+  );
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid request body" });
     return;
   }
 
   const mealType = parsed.data.mealType;
-  const dateVal = parsed.data.date;
-  const date = dateVal
-    ? (typeof dateVal === "string" ? dateVal : (dateVal as unknown as Date).toISOString().split("T")[0])
+  const date = parsed.data.date
+    ? parsed.data.date.toISOString().split("T")[0]
     : todayDate();
 
   const [existing] = await db
@@ -71,7 +70,7 @@ router.post("/recipes/regenerate", async (req: Request, res: Response) => {
     .from(dailyRecipesTable)
     .where(
       and(
-        eq(dailyRecipesTable.userId, req.user.id),
+        eq(dailyRecipesTable.userId, req.user!.id),
         eq(dailyRecipesTable.date, date),
         eq(dailyRecipesTable.mealType, mealType),
       ),
@@ -100,15 +99,10 @@ router.post("/recipes/regenerate", async (req: Request, res: Response) => {
 });
 
 router.get("/saved-recipes", async (req: Request, res: Response) => {
-  if (!req.isAuthenticated()) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-
   const recipes = await db
     .select()
     .from(savedRecipesTable)
-    .where(eq(savedRecipesTable.userId, req.user.id));
+    .where(eq(savedRecipesTable.userId, req.user!.id));
 
   res.json(
     GetSavedRecipesResponse.parse({
@@ -122,11 +116,6 @@ router.get("/saved-recipes", async (req: Request, res: Response) => {
 });
 
 router.post("/saved-recipes", async (req: Request, res: Response) => {
-  if (!req.isAuthenticated()) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-
   const parsed = SaveRecipeBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid request body" });
@@ -136,7 +125,7 @@ router.post("/saved-recipes", async (req: Request, res: Response) => {
   const [saved] = await db
     .insert(savedRecipesTable)
     .values({
-      userId: req.user.id,
+      userId: req.user!.id,
       recipeJson: parsed.data.recipeJson,
     })
     .returning();
@@ -149,19 +138,18 @@ router.post("/saved-recipes", async (req: Request, res: Response) => {
 });
 
 router.delete("/saved-recipes/:id", async (req: Request, res: Response) => {
-  if (!req.isAuthenticated()) {
-    res.status(401).json({ error: "Unauthorized" });
+  const paramsParsed = DeleteSavedRecipeParams.safeParse(req.params);
+  if (!paramsParsed.success) {
+    res.status(400).json({ error: "Invalid recipe id" });
     return;
   }
-
-  const recipeId = req.params.id as string;
 
   await db
     .delete(savedRecipesTable)
     .where(
       and(
-        eq(savedRecipesTable.id, recipeId),
-        eq(savedRecipesTable.userId, req.user.id),
+        eq(savedRecipesTable.id, paramsParsed.data.id),
+        eq(savedRecipesTable.userId, req.user!.id),
       ),
     );
 

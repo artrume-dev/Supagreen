@@ -12,15 +12,10 @@ const FORTY_EIGHT_HOURS_MS = 48 * 60 * 60 * 1000;
 const router: IRouter = Router();
 
 router.get("/streak", async (req: Request, res: Response) => {
-  if (!req.isAuthenticated()) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-
   const [streak] = await db
     .select()
     .from(userStreaksTable)
-    .where(eq(userStreaksTable.userId, req.user.id));
+    .where(eq(userStreaksTable.userId, req.user!.id));
 
   res.json(
     GetStreakResponse.parse({
@@ -32,11 +27,6 @@ router.get("/streak", async (req: Request, res: Response) => {
 });
 
 router.patch("/streak", async (req: Request, res: Response) => {
-  if (!req.isAuthenticated()) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-
   const parsed = UpdateStreakBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid request body" });
@@ -48,7 +38,7 @@ router.patch("/streak", async (req: Request, res: Response) => {
   const [existing] = await db
     .select()
     .from(userStreaksTable)
-    .where(eq(userStreaksTable.userId, req.user.id));
+    .where(eq(userStreaksTable.userId, req.user!.id));
 
   let currentStreak = 1;
   let longestStreak = 1;
@@ -75,10 +65,10 @@ router.patch("/streak", async (req: Request, res: Response) => {
         longestStreak,
         lastCookedAt: now,
       })
-      .where(eq(userStreaksTable.userId, req.user.id));
+      .where(eq(userStreaksTable.userId, req.user!.id));
   } else {
     await db.insert(userStreaksTable).values({
-      userId: req.user.id,
+      userId: req.user!.id,
       currentStreak: 1,
       longestStreak: 1,
       lastCookedAt: now,

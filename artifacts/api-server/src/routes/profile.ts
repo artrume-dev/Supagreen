@@ -10,15 +10,10 @@ import { eq } from "drizzle-orm";
 const router: IRouter = Router();
 
 router.get("/profile", async (req: Request, res: Response) => {
-  if (!req.isAuthenticated()) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-
   const [profile] = await db
     .select()
     .from(userProfilesTable)
-    .where(eq(userProfilesTable.userId, req.user.id));
+    .where(eq(userProfilesTable.userId, req.user!.id));
 
   res.json(
     GetProfileResponse.parse({
@@ -43,11 +38,6 @@ router.get("/profile", async (req: Request, res: Response) => {
 });
 
 router.put("/profile", async (req: Request, res: Response) => {
-  if (!req.isAuthenticated()) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-
   const parsed = UpdateProfileBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid request body" });
@@ -59,7 +49,7 @@ router.put("/profile", async (req: Request, res: Response) => {
   const [profile] = await db
     .insert(userProfilesTable)
     .values({
-      userId: req.user.id,
+      userId: req.user!.id,
       dietType: data.dietType,
       allergies: data.allergies,
       healthGoal: data.healthGoal,

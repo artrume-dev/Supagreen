@@ -1,5 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import {
+  GetShoppingListQueryParams,
   GetShoppingListResponse,
   ToggleShoppingItemBody,
   ToggleShoppingItemResponse,
@@ -8,6 +9,7 @@ import {
 } from "@workspace/api-zod";
 import { db, shoppingListsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
+import { coerceDateFields } from "../lib/parseDate";
 
 const router: IRouter = Router();
 
@@ -16,19 +18,19 @@ function todayDate(): string {
 }
 
 router.get("/shopping-list", async (req: Request, res: Response) => {
-  if (!req.isAuthenticated()) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-
-  const date = (req.query.date as string) || todayDate();
+  const queryParsed = GetShoppingListQueryParams.safeParse(
+    coerceDateFields({ ...req.query }, "date"),
+  );
+  const date = queryParsed.success && queryParsed.data.date
+    ? queryParsed.data.date.toISOString().split("T")[0]
+    : todayDate();
 
   const [list] = await db
     .select()
     .from(shoppingListsTable)
     .where(
       and(
-        eq(shoppingListsTable.userId, req.user.id),
+        eq(shoppingListsTable.userId, req.user!.id),
         eq(shoppingListsTable.date, date),
       ),
     );
@@ -61,26 +63,20 @@ router.get("/shopping-list", async (req: Request, res: Response) => {
 });
 
 router.put("/shopping-list", async (req: Request, res: Response) => {
-  if (!req.isAuthenticated()) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-
-  const parsed = UpsertShoppingListBody.safeParse(req.body);
+  const parsed = UpsertShoppingListBody.safeParse(
+    coerceDateFields({ ...req.body }, "date"),
+  );
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid request body" });
     return;
   }
 
-  const dateVal = parsed.data.date;
-  const dateStr = typeof dateVal === "string"
-    ? dateVal
-    : (dateVal as unknown as Date).toISOString().split("T")[0];
+  const dateStr = parsed.data.date.toISOString().split("T")[0];
 
   const [list] = await db
     .insert(shoppingListsTable)
     .values({
-      userId: req.user.id,
+      userId: req.user!.id,
       date: dateStr,
       itemsJson: parsed.data.items,
       checkedItems: [],
@@ -111,29 +107,23 @@ router.put("/shopping-list", async (req: Request, res: Response) => {
 });
 
 router.patch("/shopping-list/check", async (req: Request, res: Response) => {
-  if (!req.isAuthenticated()) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-
-  const parsed = ToggleShoppingItemBody.safeParse(req.body);
+  const parsed = ToggleShoppingItemBody.safeParse(
+    coerceDateFields({ ...req.body }, "date"),
+  );
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid request body" });
     return;
   }
 
   const { itemName, checked } = parsed.data;
-  const dateVal = parsed.data.date;
-  const dateStr = typeof dateVal === "string"
-    ? dateVal
-    : (dateVal as unknown as Date).toISOString().split("T")[0];
+  const dateStr = parsed.data.date.toISOString().split("T")[0];
 
   const [list] = await db
     .select()
     .from(shoppingListsTable)
     .where(
       and(
-        eq(shoppingListsTable.userId, req.user.id),
+        eq(shoppingListsTable.userId, req.user!.id),
         eq(shoppingListsTable.date, dateStr),
       ),
     );
