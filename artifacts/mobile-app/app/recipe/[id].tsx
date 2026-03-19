@@ -1,4 +1,4 @@
-import { Feather, Ionicons } from "@expo/vector-icons";
+import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
@@ -17,14 +17,32 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 
 import Colors from "@/constants/colors";
+import { getRecipeDetailCacheKey, type CachedRecipeDetail } from "@/features/home/recipeDetailCache";
+import { getTodayDateString } from "@/features/common/date";
+import { useAuth } from "@/lib/auth";
 import {
+  getShoppingList,
+  getGetProfileQueryOptions,
   getGetTodayRecipesQueryOptions,
   getGetSavedRecipesQueryOptions,
   useSaveRecipe,
   useUpsertShoppingList,
   getGetSavedRecipesQueryKey,
   getGetShoppingListQueryKey,
+  useUpdateStreak,
 } from "@workspace/api-client-react";
+
+function parseGoalList(rawGoal: string | null | undefined): string[] {
+  if (!rawGoal) return [];
+  return rawGoal
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function formatGoalLabel(goal: string): string {
+  return goal.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
 
 function MacroBar({
   label,
@@ -81,7 +99,10 @@ const mbStyles = StyleSheet.create({
 });
 
 export default function RecipeDetailScreen() {
-  const { id } = useLocalSearchParams();
+  const { id: rawId } = useLocalSearchParams<{ id?: string | string[] }>();
+  const recipeId = Array.isArray(rawId) ? rawId[0] : rawId;
+  const isVirtualRecipe = Boolean(recipeId?.startsWith("virtual-"));
+  const { user, isLoading: authLoading } = useAuth();
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
   const queryClient = useQueryClient();
@@ -93,18 +114,28 @@ export default function RecipeDetailScreen() {
     new Set()
   );
   const [isSavedLocal, setIsSavedLocal] = useState(false);
+  const [hasAddedToList, setHasAddedToList] = useState(false);
+  const [lastAddedIngredientNames, setLastAddedIngredientNames] = useState<string[]>([]);
 
-  const todayDate = new Date().toISOString().split("T")[0];
+  const todayDate = getTodayDateString();
 
   const { data: recipesData, isLoading: todayLoading } = useQuery({
     ...getGetTodayRecipesQueryOptions({ date: todayDate }),
+    enabled: !authLoading && !!user,
   });
 
   const { data: savedData, isLoading: savedLoading } = useQuery({
     ...getGetSavedRecipesQueryOptions(),
+    enabled: !authLoading && !!user,
   });
 
-  const isLoading = todayLoading || savedLoading;
+  const { data: profileData } = useQuery({
+    ...getGetProfileQueryOptions(),
+    enabled: !authLoading && !!user,
+  });
+
+  const isLoading = authLoading || todayLoading || savedLoading;
+  const selectedGoals = parseGoalList(profileData?.profile?.healthGoal);
 
   const saveMutation = useSaveRecipe({
     mutation: {
@@ -121,7 +152,6 @@ export default function RecipeDetailScreen() {
       onSuccess: () => {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         queryClient.invalidateQueries({ queryKey: getGetShoppingListQueryKey() });
-        Alert.alert("Added", "Ingredients added to your shopping list");
       },
       onError: () => {
         Alert.alert("Error", "Could not add to shopping list");
@@ -129,11 +159,34 @@ export default function RecipeDetailScreen() {
     },
   });
 
-  const todayRecipe = recipesData?.recipes?.find((r) => String(r.id) === String(id));
-  const savedRecipe = savedData?.recipes?.find((sr) => String(sr.id) === String(id));
-  const recipe = todayRecipe ?? (savedRecipe ? { id: savedRecipe.id, mealType: "Saved", recipe: savedRecipe.recipe, date: savedRecipe.savedAt } : undefined);
+  const updateStreakMutation = useUpdateStreak({
+    mutation: {
+      onSuccess: () => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Alert.alert("Meal logged", "Your streak has been updated.");
+      },
+      onError: (error: unknown) => {
+        const message =
+          error instanceof Error ? error.message : "This meal may already be logged.";
+        Alert.alert("Could not log meal", message);
+      },
+    },
+  });
+
+  const todayRecipe = recipesData?.recipes?.find((r) => String(r.id) === String(recipeId));
+  const savedRecipe = savedData?.recipes?.find((sr) => String(sr.id) === String(recipeId));
+  const cachedRecipe = recipeId
+    ? queryClient.getQueryData<CachedRecipeDetail>(getRecipeDetailCacheKey(String(recipeId)))
+    : undefined;
+  const recipe =
+    todayRecipe ??
+    (savedRecipe
+      ? { id: savedRecipe.id, mealType: "Saved", recipe: savedRecipe.recipe, date: savedRecipe.savedAt }
+      : undefined) ??
+    cachedRecipe;
   const recipeData = recipe?.recipe;
-  const isSaved = isSavedLocal || !!savedData?.recipes?.some((sr) => String(sr.id) === String(id));
+  const isSaved = isSavedLocal || !!savedData?.recipes?.some((sr) => String(sr.id) === String(recipeId));
+  const addedIngredientCount = lastAddedIngredientNames.length;
 
   const toggleIngredient = (i: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -153,16 +206,87 @@ export default function RecipeDetailScreen() {
     });
   };
 
-  const handleAddToShop = () => {
+  const handleAddToShop = async () => {
     if (!recipeData) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const shopItems = (recipeData.ingredients ?? []).map((ing) => ({
-      name: ing.name ?? "",
-      amount: ing.amount ?? "",
-      unit: ing.unit ?? "",
-      category: ing.isKeyIngredient ? "Protein" : "Pantry",
-    }));
-    addToShopMutation.mutate({ data: { date: todayDate, items: shopItems } });
+    const sourceIngredients =
+      checkedIngredients.size > 0
+        ? (recipeData.ingredients ?? []).filter((_, idx) => checkedIngredients.has(idx))
+        : (recipeData.ingredients ?? []);
+
+    const newItems = sourceIngredients.map((ing) => ({
+        name: ing.name ?? "Unknown",
+        amount: ing.amount ?? "1",
+        unit: ing.unit ?? "",
+        category: "Grocery",
+      }));
+    const selectedIngredientNames = newItems.map((item) => item.name);
+
+    if (newItems.length === 0) {
+      Alert.alert("No ingredients", "This recipe has no ingredients to add.");
+      return;
+    }
+
+    try {
+      let existingItems: Array<{ name: string; amount: string; unit: string; category: string }> = [];
+      try {
+        const existing = await getShoppingList({ date: todayDate });
+        existingItems = (existing.items ?? []).map((item) => ({
+          name: item.name,
+          amount: item.amount,
+          unit: item.unit ?? "",
+          category: item.category ?? "Grocery",
+        }));
+      } catch {
+        // First list for date is expected to 404/empty in some environments.
+      }
+
+      const existingNames = new Set(existingItems.map((item) => item.name.trim().toLowerCase()));
+      const mergedItems = [
+        ...existingItems,
+        ...newItems.filter((item) => !existingNames.has(item.name.trim().toLowerCase())),
+      ];
+
+      const updated = await addToShopMutation.mutateAsync({
+        data: { date: todayDate, items: mergedItems },
+      });
+      queryClient.setQueryData(getGetShoppingListQueryKey({ date: todayDate }), updated);
+      queryClient.invalidateQueries({ queryKey: getGetShoppingListQueryKey({ date: todayDate }) });
+      setLastAddedIngredientNames(selectedIngredientNames);
+      setHasAddedToList(true);
+      Alert.alert("Added", "Ingredients added to your shopping list");
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Could not add to shopping list";
+      Alert.alert("Error", message);
+    }
+  };
+
+  const handlePrimaryAction = () => {
+    if (hasAddedToList) {
+      router.push({
+        pathname: "/(tabs)/shopping",
+        params: {
+          from: "recipe",
+          recipeId: String(recipeId),
+          date: todayDate,
+          selected: JSON.stringify(lastAddedIngredientNames),
+        },
+      });
+      return;
+    }
+    void handleAddToShop();
+  };
+
+  const handleLogMeal = () => {
+    if (isVirtualRecipe) {
+      Alert.alert(
+        "Tracking unavailable",
+        "This is a goal-preview recipe. Generate or save it first to track it in your streak.",
+      );
+      return;
+    }
+    if (!recipeId) return;
+    updateStreakMutation.mutate({ data: { recipeId: String(recipeId) } });
   };
 
   if (isLoading) {
@@ -254,7 +378,9 @@ export default function RecipeDetailScreen() {
 
         {recipeData.goalAlignment && (
           <View style={styles.goalBanner}>
-            <Feather name="target" size={14} color={Colors.accent} />
+            <View style={styles.goalBannerIconWrap}>
+              <Ionicons name="flame-outline" size={20} color={Colors.accent} />
+            </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.goalBannerTitle}>GOAL ALIGNMENT</Text>
               <Text style={styles.goalBannerDesc}>
@@ -264,6 +390,15 @@ export default function RecipeDetailScreen() {
           </View>
         )}
 
+        {selectedGoals.length > 1 ? (
+          <View style={styles.multiGoalBanner}>
+            <Text style={styles.multiGoalTitle}>Also supports goals</Text>
+            <Text style={styles.multiGoalText}>
+              {selectedGoals.map(formatGoalLabel).join(" · ")}
+            </Text>
+          </View>
+        ) : null}
+
         <View style={styles.scoreRow}>
           <View style={styles.scoreBadge}>
             <Feather name="star" size={14} color="#fff" />
@@ -271,10 +406,16 @@ export default function RecipeDetailScreen() {
           </View>
           <View>
             <Text style={styles.scoreLabel}>Excellent nutritional score</Text>
-            <Text style={styles.scoreServings}>
-              {recipeData.servings || 1} serving
-              {(recipeData.servings || 1) > 1 ? "s" : ""}
-            </Text>
+            <View style={styles.scoreServingsRow}>
+              <MaterialCommunityIcons
+                name="chef-hat"
+                size={14}
+                color={Colors.textSecondary}
+              />
+              <Text style={styles.scoreServings}>
+                {recipeData.servings || 1} servings
+              </Text>
+            </View>
           </View>
         </View>
 
@@ -332,17 +473,21 @@ export default function RecipeDetailScreen() {
                     <Feather name="check" size={12} color="#fff" />
                   )}
                 </View>
-                <Text
-                  style={[
-                    styles.ingredientName,
-                    checkedIngredients.has(i) && styles.ingredientNameChecked,
-                  ]}
-                >
-                  {ing.name}
+                <View style={styles.ingredientNameWrap}>
+                  <Text
+                    style={[
+                      styles.ingredientName,
+                      checkedIngredients.has(i) && styles.ingredientNameChecked,
+                    ]}
+                  >
+                    {ing.name}
+                  </Text>
                   {ing.isKeyIngredient && (
-                    <Text style={{ color: Colors.primary }}> *</Text>
+                    <View style={styles.keyBadge}>
+                      <Text style={styles.keyBadgeText}>KEY</Text>
+                    </View>
                   )}
-                </Text>
+                </View>
                 <Text style={styles.ingredientAmount}>
                   {ing.amount} {ing.unit}
                 </Text>
@@ -391,10 +536,10 @@ export default function RecipeDetailScreen() {
         {recipeData.healthBenefits && recipeData.healthBenefits.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Health Benefits</Text>
-            <View style={styles.benefitsGrid}>
+            <View style={styles.benefitsList}>
               {recipeData.healthBenefits.map((b, i) => (
-                <View key={i} style={styles.benefitChip}>
-                  <Feather name="check-circle" size={12} color={Colors.primary} />
+                <View key={i} style={styles.benefitRow}>
+                  <View style={styles.benefitDot} />
                   <Text style={styles.benefitText}>{b}</Text>
                 </View>
               ))}
@@ -419,42 +564,54 @@ export default function RecipeDetailScreen() {
           { paddingBottom: isWeb ? 34 : Math.max(insets.bottom, 16) + 8 },
         ]}
       >
-        <Pressable
-          onPress={handleAddToShop}
-          disabled={addToShopMutation.isPending}
-          style={({ pressed }) => [
-            styles.addToShopButton,
-            pressed && { transform: [{ scale: 0.98 }] },
-          ]}
-        >
-          <LinearGradient
-            colors={[Colors.primary, "#16A34A"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.addToShopGradient}
+        {hasAddedToList && addedIngredientCount > 0 && (
+          <Text style={styles.addedIngredientsLabel}>
+            {addedIngredientCount} ingredient{addedIngredientCount === 1 ? "" : "s"} added
+          </Text>
+        )}
+        <View style={styles.stickyActionsRow}>
+          <Pressable
+            onPress={handlePrimaryAction}
+            disabled={addToShopMutation.isPending}
+            style={({ pressed }) => [
+              styles.addToShopButton,
+              pressed && { transform: [{ scale: 0.98 }] },
+            ]}
           >
-            <Feather name="shopping-cart" size={18} color="#fff" />
-            <Text style={styles.addToShopText}>Add to Shopping List</Text>
-          </LinearGradient>
-        </Pressable>
-        <Pressable
-          onPress={() => {
-            if (!isSaved && recipeData) {
-              saveMutation.mutate({ data: { recipeJson: recipeData } });
-            }
-          }}
-          style={styles.shareButton}
-        >
-          <Feather
-            name="bookmark"
-            size={18}
-            color={isSaved ? Colors.primary : Colors.text}
-          />
-        </Pressable>
+            <LinearGradient
+              colors={[Colors.primary, "#16A34A"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.addToShopGradient}
+            >
+              <Feather name="shopping-cart" size={18} color="#fff" />
+              <Text style={styles.addToShopText}>
+                {addToShopMutation.isPending
+                  ? "Adding..."
+                  : hasAddedToList
+                    ? "Show Shopping List"
+                    : "Add to Shopping List"}
+              </Text>
+            </LinearGradient>
+          </Pressable>
+          <Pressable
+            onPress={handleLogMeal}
+            style={styles.shareButton}
+            disabled={updateStreakMutation.isPending}
+          >
+            <Ionicons
+              name="flame-outline"
+              size={18}
+              color={Colors.accent}
+            />
+          </Pressable>
+        </View>
       </View>
     </View>
   );
 }
+
+const CONTENT_BLOCK_PADDING = 16;
 
 const styles = StyleSheet.create({
   container: {
@@ -556,27 +713,59 @@ const styles = StyleSheet.create({
   goalBanner: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 10,
+    gap: 12,
     marginHorizontal: 20,
     marginTop: 16,
-    backgroundColor: "rgba(249,115,22,0.1)",
+    backgroundColor: "rgba(249,115,22,0.08)",
     borderWidth: 1,
-    borderColor: "rgba(249,115,22,0.2)",
+    borderColor: "rgba(249,115,22,0.3)",
     borderRadius: 16,
-    padding: 14,
+    padding: 16,
+  },
+  goalBannerIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: "rgba(249,115,22,0.2)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   goalBannerTitle: {
-    fontSize: 10,
-    fontFamily: "Inter_700Bold",
-    color: Colors.accent,
-    letterSpacing: 0.5,
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+    color: "#FB923C",
+    letterSpacing: 1,
   },
   goalBannerDesc: {
-    fontSize: 12,
+    fontSize: 14,
     fontFamily: "Inter_400Regular",
-    color: "rgba(255,255,255,0.7)",
-    lineHeight: 18,
+    color: "rgba(255,255,255,0.9)",
+    lineHeight: 20,
     marginTop: 2,
+  },
+  multiGoalBanner: {
+    marginHorizontal: 20,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: "rgba(34,197,94,0.25)",
+    borderRadius: 14,
+    backgroundColor: "rgba(34,197,94,0.08)",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  multiGoalTitle: {
+    fontSize: 11,
+    fontFamily: "Inter_700Bold",
+    color: Colors.primary,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  multiGoalText: {
+    marginTop: 4,
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+    color: Colors.text,
+    lineHeight: 18,
   },
   scoreRow: {
     flexDirection: "row",
@@ -588,14 +777,16 @@ const styles = StyleSheet.create({
   scoreBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: 6,
     backgroundColor: Colors.primary,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
   },
   scoreValue: {
-    fontSize: 16,
+    fontSize: 20,
     fontFamily: "Inter_700Bold",
     color: "#fff",
   },
@@ -604,8 +795,13 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
     color: Colors.text,
   },
+  scoreServingsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
   scoreServings: {
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: "Inter_400Regular",
     color: Colors.textSecondary,
   },
@@ -657,8 +853,8 @@ const styles = StyleSheet.create({
     gap: 12,
     backgroundColor: Colors.card,
     borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
+    paddingHorizontal: CONTENT_BLOCK_PADDING,
+    paddingVertical: CONTENT_BLOCK_PADDING,
   },
   ingredientChecked: {
     opacity: 0.5,
@@ -677,26 +873,45 @@ const styles = StyleSheet.create({
     borderColor: Colors.primary,
   },
   ingredientName: {
-    flex: 1,
     fontSize: 14,
     fontFamily: "Inter_500Medium",
     color: Colors.text,
+  },
+  ingredientNameWrap: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
   ingredientNameChecked: {
     textDecorationLine: "line-through",
     color: Colors.textTertiary,
   },
+  keyBadge: {
+    backgroundColor: "rgba(34,197,94,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(34,197,94,0.35)",
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  keyBadgeText: {
+    fontSize: 10,
+    fontFamily: "Inter_700Bold",
+    color: Colors.primary,
+    letterSpacing: 0.3,
+  },
   ingredientAmount: {
     fontSize: 12,
-    fontFamily: "Inter_400Regular",
-    color: Colors.textTertiary,
+    fontFamily: "Inter_600SemiBold",
+    color: "rgba(74, 222, 128, 0.9)",
   },
   stepRow: {
     flexDirection: "row",
     gap: 12,
     backgroundColor: Colors.card,
     borderRadius: 14,
-    padding: 14,
+    padding: CONTENT_BLOCK_PADDING,
   },
   stepCompleted: {
     opacity: 0.5,
@@ -719,36 +934,43 @@ const styles = StyleSheet.create({
   },
   stepText: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: "Inter_400Regular",
     color: "rgba(255,255,255,0.8)",
-    lineHeight: 20,
+    lineHeight: 22,
   },
   stepTextDone: {
     textDecorationLine: "line-through",
     color: Colors.textTertiary,
   },
-  benefitsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
+  benefitsList: {
     gap: 8,
   },
-  benefitChip: {
+  benefitRow: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
+    alignItems: "flex-start",
+    gap: 10,
     backgroundColor: "rgba(34,197,94,0.08)",
     borderWidth: 1,
     borderColor: "rgba(34,197,94,0.15)",
     borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: CONTENT_BLOCK_PADDING,
+    paddingVertical: CONTENT_BLOCK_PADDING,
+  },
+  benefitDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginTop: 6,
+    backgroundColor: Colors.primary,
   },
   benefitText: {
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: "Inter_500Medium",
     color: Colors.primary,
-    flexShrink: 1,
+    flex: 1,
+    flexWrap: "wrap",
+    lineHeight: 21,
   },
   swapCard: {
     flexDirection: "row",
@@ -760,7 +982,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(249,115,22,0.15)",
     borderRadius: 16,
-    padding: 14,
+    padding: CONTENT_BLOCK_PADDING,
   },
   swapTitle: {
     fontSize: 10,
@@ -769,10 +991,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   swapDesc: {
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: "Inter_400Regular",
     color: "rgba(255,255,255,0.6)",
-    lineHeight: 18,
+    lineHeight: 20,
     marginTop: 2,
   },
   stickyBottom: {
@@ -780,13 +1002,21 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    flexDirection: "row",
     gap: 10,
     paddingHorizontal: 20,
     paddingTop: 14,
     backgroundColor: "rgba(28,43,30,0.95)",
     borderTopWidth: 1,
     borderTopColor: Colors.border,
+  },
+  stickyActionsRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  addedIngredientsLabel: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    color: "rgba(74, 222, 128, 0.95)",
   },
   addToShopButton: {
     flex: 1,

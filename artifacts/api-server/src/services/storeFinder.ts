@@ -35,53 +35,63 @@ export async function findNearbyStores(
     );
   }
 
-  const url = new URL(
-    "https://maps.googleapis.com/maps/api/place/nearbysearch/json",
-  );
-  url.searchParams.set("location", `${lat},${lng}`);
-  url.searchParams.set("radius", String(radius));
-  url.searchParams.set("type", "supermarket");
-  url.searchParams.set("keyword", "grocery supermarket health food store");
-  url.searchParams.set("key", apiKey);
-
-  const response = await fetch(url.toString());
+  // Use Places API (New) Nearby Search endpoint.
+  const response = await fetch("https://places.googleapis.com/v1/places:searchNearby", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": apiKey,
+      "X-Goog-FieldMask":
+        "places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.currentOpeningHours.openNow",
+    },
+    body: JSON.stringify({
+      includedTypes: ["supermarket"],
+      maxResultCount: 8,
+      locationRestriction: {
+        circle: {
+          center: {
+            latitude: lat,
+            longitude: lng,
+          },
+          radius,
+        },
+      },
+    }),
+  });
   if (!response.ok) {
     throw new Error(`Google Places API returned ${response.status}`);
   }
 
   const data = (await response.json()) as {
-    status: string;
-    results: Array<{
-      name: string;
-      vicinity: string;
-      geometry: { location: { lat: number; lng: number } };
-      opening_hours?: { open_now: boolean };
-      place_id: string;
+    places?: Array<{
+      id: string;
+      displayName?: { text?: string };
+      formattedAddress?: string;
+      location?: { latitude: number; longitude: number };
       rating?: number;
+      currentOpeningHours?: { openNow?: boolean };
     }>;
-    error_message?: string;
+    error?: { message?: string };
   };
 
-  if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
-    throw new Error(
-      `Google Places API error: ${data.status} — ${data.error_message ?? "unknown"}`,
-    );
+  if (data.error?.message) {
+    throw new Error(`Google Places API error: ${data.error.message}`);
   }
 
-  const stores: NearbyStore[] = (data.results || [])
+  const stores: NearbyStore[] = (data.places || [])
     .map((place) => ({
-      name: place.name,
-      address: place.vicinity,
+      name: place.displayName?.text ?? "Unknown store",
+      address: place.formattedAddress ?? "Address unavailable",
       distance: Math.round(
         haversineDistance(
           lat,
           lng,
-          place.geometry.location.lat,
-          place.geometry.location.lng,
+          place.location?.latitude ?? lat,
+          place.location?.longitude ?? lng,
         ),
       ),
-      openNow: place.opening_hours?.open_now ?? null,
-      mapsLink: `https://www.google.com/maps/place/?q=place_id:${place.place_id}`,
+      openNow: place.currentOpeningHours?.openNow ?? null,
+      mapsLink: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.displayName?.text ?? "grocery store")}&query_place_id=${place.id}`,
       rating: place.rating ?? null,
     }))
     .sort((a, b) => a.distance - b.distance)

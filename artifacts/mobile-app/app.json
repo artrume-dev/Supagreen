@@ -14,23 +14,27 @@
       "backgroundColor": "#0F1710"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "com.recipegenie.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "NutriSnap uses your location to personalize local seasonal ingredients and nearby store suggestions.",
+        "NSPhotoLibraryUsageDescription": "NutriSnap needs photo library access when you choose to upload recipe or profile images.",
+        "NSCameraUsageDescription": "NutriSnap needs camera access when you choose to capture photos for recipe or profile updates."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#0F1710"
-      }
+      },
+      "package": "com.recipegenie.app",
+      "versionCode": 1
     },
     "web": {
       "favicon": "./assets/images/icon.png"
     },
     "plugins": [
-      [
-        "expo-router",
-        {
-          "origin": "https://replit.com/"
-        }
-      ],
+      "expo-router",
       "expo-font",
       "expo-web-browser"
     ],

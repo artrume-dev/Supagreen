@@ -8,4 +8,12 @@ router.get("/healthz", (_req, res) => {
   res.json(data);
 });
 
+router.get("/capabilities", (_req, res) => {
+  res.json({
+    features: {
+      mealHistory: true,
+    },
+  });
+});
+
 export default router;

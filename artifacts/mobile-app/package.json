@@ -4,10 +4,15 @@
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
-    "dev": "EXPO_PACKAGER_PROXY_URL=https://$REPLIT_EXPO_DEV_DOMAIN EXPO_PUBLIC_DOMAIN=$REPLIT_DEV_DOMAIN EXPO_PUBLIC_REPL_ID=$REPL_ID REACT_NATIVE_PACKAGER_HOSTNAME=$REPLIT_DEV_DOMAIN pnpm exec expo start --localhost --port $PORT",
+    "dev": "EXPO_PUBLIC_API_BASE_URL=${EXPO_PUBLIC_API_BASE_URL:-http://$(ipconfig getifaddr en0):3001} expo start --host lan --port ${PORT:-8081}",
     "build": "node scripts/build.js",
     "serve": "node server/serve.js",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "eas:build:ios:preview": "eas build --platform ios --profile preview",
+    "eas:build:ios:production": "eas build --platform ios --profile production",
+    "eas:submit:ios": "eas submit --platform ios --profile production",
+    "android": "expo run:android",
+    "ios": "expo run:ios"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
@@ -58,6 +63,9 @@
   "dependencies": {
     "expo-auth-session": "~7.0.10",
     "expo-clipboard": "~8.0.8",
-    "expo-crypto": "~15.0.8"
+    "expo-crypto": "~15.0.8",
+    "expo": "~54.0.33",
+    "react": "19.1.0",
+    "react-native": "0.81.5"
   }
 }

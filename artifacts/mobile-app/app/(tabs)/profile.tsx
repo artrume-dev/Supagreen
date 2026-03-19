@@ -18,11 +18,11 @@ import Svg, { Rect, Text as SvgText } from "react-native-svg";
 
 import Colors from "@/constants/colors";
 import { useAuth } from "@/lib/auth";
+import { getMealHistory } from "@/features/profile/history";
 import {
   getGetProfileQueryOptions,
   getGetStreakQueryOptions,
   getGetSavedRecipesQueryOptions,
-  getGetTodayRecipesQueryOptions,
   type DailyRecipeItem,
 } from "@workspace/api-client-react";
 
@@ -123,44 +123,54 @@ const chartStyles = StyleSheet.create({
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
-  const { user, signOut } = useAuth();
+  const { user, signOut, isLoading: authLoading } = useAuth();
+  const handleSignOut = async () => {
+    await signOut();
+  };
+
   const [activeTab, setActiveTab] = useState<"stats" | "saved">("stats");
+  const [historyDaysFilter, setHistoryDaysFilter] = useState<7 | 30 | 90>(30);
 
   const { data: profileResponse } = useQuery({
     ...getGetProfileQueryOptions(),
+    enabled: !authLoading && !!user,
   });
 
   const { data: streakData } = useQuery({
     ...getGetStreakQueryOptions(),
+    enabled: !authLoading && !!user,
   });
 
   const { data: savedData } = useQuery({
     ...getGetSavedRecipesQueryOptions(),
+    enabled: !authLoading && !!user,
   });
 
-  const { data: weekRecipesData } = useQuery({
-    queryKey: ["weekRecipes"],
-    queryFn: async () => {
-      const { getTodayRecipes } = await import("@workspace/api-client-react");
-      const promises = Array.from({ length: 7 }, (_, i) => {
-        const d = new Date();
-        d.setDate(d.getDate() - (6 - i));
-        const dateStr = d.toISOString().split("T")[0];
-        return getTodayRecipes({ date: dateStr })
-          .then((r) => r.recipes || [])
-          .catch(() => [] as DailyRecipeItem[]);
-      });
-      const allRecipes = (await Promise.all(promises)).flat();
-      return { recipes: allRecipes };
-    },
+  const { data: mealHistoryData, isLoading: mealHistoryLoading } = useQuery({
+    queryKey: ["mealHistory", historyDaysFilter],
+    queryFn: () => getMealHistory(historyDaysFilter),
     staleTime: 5 * 60 * 1000,
+    enabled: !authLoading && !!user,
   });
 
   const profileData = profileResponse?.profile;
   const streak = streakData?.currentStreak || 0;
   const longestStreak = streakData?.longestStreak || 0;
   const savedRecipes = savedData?.recipes || [];
-  const weekRecipes = weekRecipesData?.recipes || [];
+  const weekRecipes = (mealHistoryData?.days ?? [])
+    .flatMap((day) =>
+      day.recipes.map((recipe) => ({
+        ...recipe,
+        recipe: recipe.recipe as DailyRecipeItem["recipe"],
+      })),
+    )
+    .map((entry) => ({
+      id: entry.id,
+      mealType: entry.mealType,
+      date: entry.date,
+      recipe: entry.recipe,
+      wasRegenerated: entry.wasRegenerated,
+    })) as DailyRecipeItem[];
 
   const displayName =
     user?.firstName && user?.lastName
@@ -169,8 +179,11 @@ export default function ProfileScreen() {
 
   const goalLabel = profileData?.healthGoal
     ? profileData.healthGoal
-        .replace(/_/g, " ")
-        .replace(/\b\w/g, (c) => c.toUpperCase())
+        .split(",")
+        .map((goal) => goal.trim())
+        .filter(Boolean)
+        .map((goal) => goal.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()))
+        .join(", ")
     : "Not set";
 
   const dietLabel = profileData?.dietType
@@ -212,7 +225,7 @@ export default function ProfileScreen() {
             </Text>
           </View>
           <Pressable
-            onPress={() => router.push("/onboarding")}
+            onPress={() => router.push("/onboarding?edit=1")}
             style={styles.settingsBtn}
           >
             <Feather name="settings" size={20} color={Colors.textSecondary} />
@@ -403,6 +416,72 @@ export default function ProfileScreen() {
           <View style={styles.overviewSection}>
             <WeeklyMacroChart recipes={weekRecipes} />
 
+            <View style={styles.historyCard}>
+              <View style={styles.historyHeaderRow}>
+                <Text style={styles.historyTitle}>Meal History</Text>
+                <Text style={styles.historyCount}>
+                  {mealHistoryData?.totalMeals ?? 0} meals
+                </Text>
+              </View>
+              <View style={styles.historyFilters}>
+                {[7, 30, 90].map((days) => (
+                  <Pressable
+                    key={days}
+                    onPress={() => setHistoryDaysFilter(days as 7 | 30 | 90)}
+                    style={[
+                      styles.historyFilter,
+                      historyDaysFilter === days && styles.historyFilterActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.historyFilterText,
+                        historyDaysFilter === days && styles.historyFilterTextActive,
+                      ]}
+                    >
+                      {days}d
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+              {mealHistoryLoading ? (
+                <Text style={styles.historyLoadingText}>Loading meals...</Text>
+              ) : mealHistoryData?.days?.length ? (
+                mealHistoryData.days.slice(0, 3).map((day) => (
+                  <View key={day.date} style={styles.historyDayBlock}>
+                    <Text style={styles.historyDayTitle}>
+                      {new Date(`${day.date}T00:00:00`).toLocaleDateString("en-US", {
+                        weekday: "short",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </Text>
+                    {day.recipes.slice(0, 3).map((item) => (
+                      <Pressable
+                        key={item.id}
+                        onPress={() =>
+                          router.push({
+                            pathname: "/recipe/[id]",
+                            params: { id: String(item.id) },
+                          })
+                        }
+                        style={styles.historyRecipeRow}
+                      >
+                        <Text style={styles.historyRecipeTitle} numberOfLines={1}>
+                          {item.recipe.emoji ?? "🍽"} {item.recipe.title ?? "Untitled recipe"}
+                        </Text>
+                        <Text style={styles.historyRecipeMeta}>
+                          {item.mealType} · {item.recipe.prepTime ?? 0} min
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.historyLoadingText}>No meal history yet.</Text>
+              )}
+            </View>
+
             <View style={styles.infoCard}>
               <View style={styles.infoRow}>
                 <Feather name="target" size={16} color={Colors.primary} />
@@ -429,7 +508,7 @@ export default function ProfileScreen() {
             </View>
 
             <Pressable
-              onPress={() => router.push("/onboarding")}
+              onPress={() => router.push("/onboarding?edit=1")}
               style={styles.editProfileButton}
             >
               <Feather name="edit-2" size={16} color={Colors.primary} />
@@ -438,7 +517,7 @@ export default function ProfileScreen() {
           </View>
         )}
 
-        <Pressable onPress={signOut} style={styles.logoutButton}>
+        <Pressable onPress={() => void handleSignOut()} style={styles.logoutButton}>
           <Feather name="log-out" size={16} color={Colors.error} />
           <Text style={styles.logoutText}>Sign Out</Text>
         </Pressable>
@@ -702,6 +781,81 @@ const styles = StyleSheet.create({
   overviewSection: {
     paddingHorizontal: 20,
     gap: 12,
+  },
+  historyCard: {
+    backgroundColor: Colors.card,
+    borderRadius: 16,
+    padding: 16,
+    gap: 10,
+  },
+  historyHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  historyTitle: {
+    fontSize: 14,
+    fontFamily: "Inter_700Bold",
+    color: Colors.text,
+  },
+  historyCount: {
+    fontSize: 11,
+    fontFamily: "Inter_500Medium",
+    color: Colors.textSecondary,
+  },
+  historyFilters: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  historyFilter: {
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  historyFilterActive: {
+    backgroundColor: Colors.primary,
+  },
+  historyFilterText: {
+    fontSize: 11,
+    fontFamily: "Inter_700Bold",
+    color: Colors.textSecondary,
+  },
+  historyFilterTextActive: {
+    color: "#fff",
+  },
+  historyLoadingText: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textSecondary,
+  },
+  historyDayBlock: {
+    gap: 6,
+    paddingTop: 4,
+  },
+  historyDayTitle: {
+    fontSize: 11,
+    fontFamily: "Inter_700Bold",
+    color: Colors.primary,
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+  },
+  historyRecipeRow: {
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  historyRecipeTitle: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.text,
+  },
+  historyRecipeMeta: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textSecondary,
+    marginTop: 2,
   },
   infoCard: {
     backgroundColor: Colors.card,

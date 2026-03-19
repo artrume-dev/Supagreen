@@ -9,6 +9,14 @@ export interface HealthStatus {
   status: string;
 }
 
+export type CapabilitiesResponseFeatures = {
+  mealHistory: boolean;
+};
+
+export interface CapabilitiesResponse {
+  features: CapabilitiesResponseFeatures;
+}
+
 export interface AuthUser {
   id: string;
   /** @nullable */
@@ -145,9 +153,31 @@ export interface DailyRecipesResponse {
   date: string;
 }
 
+export interface MealHistoryRecipe {
+  id: string;
+  mealType: string;
+  recipe: RecipeObject;
+  date: string;
+  wasRegenerated: boolean;
+}
+
+export interface MealHistoryDay {
+  date: string;
+  recipes: MealHistoryRecipe[];
+}
+
+export interface MealHistoryResponse {
+  days: MealHistoryDay[];
+  totalMeals: number;
+}
+
 export interface RegenerateRecipeRequest {
   /** The meal slot to regenerate (breakfast, lunch, dinner, treat) */
   mealType: string;
+  date?: string;
+}
+
+export interface RegenerateMenuRequest {
   date?: string;
 }
 
@@ -236,12 +266,26 @@ export type GetTodayRecipesParams = {
   date?: string;
 };
 
+export type GetRecipeHistoryParams = {
+  /**
+   * @minimum 1
+   * @maximum 120
+   */
+  days?: number;
+};
+
 export type GetShoppingListParams = {
   date?: string;
 };
 
 export type GetNearbyStoresParams = {
-  lat: number;
-  lng: number;
+  /**
+   * Latitude. If omitted, backend falls back to saved profile location.
+   */
+  lat?: number;
+  /**
+   * Longitude. If omitted, backend falls back to saved profile location.
+   */
+  lng?: number;
   radius?: number;
 };

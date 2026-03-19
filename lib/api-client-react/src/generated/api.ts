@@ -19,18 +19,22 @@ import type {
 import type {
   AuthUserEnvelope,
   BeginBrowserLoginParams,
+  CapabilitiesResponse,
   DailyRecipeItem,
   DailyRecipesResponse,
   ErrorEnvelope,
   GetNearbyStoresParams,
+  GetRecipeHistoryParams,
   GetShoppingListParams,
   GetTodayRecipesParams,
   HandleBrowserLoginCallbackParams,
   HealthStatus,
   LogoutSuccess,
+  MealHistoryResponse,
   MobileTokenExchangeRequest,
   MobileTokenExchangeSuccess,
   NearbyStoresResponse,
+  RegenerateMenuRequest,
   RegenerateRecipeRequest,
   SaveRecipeRequest,
   SavedRecipeItem,
@@ -122,6 +126,81 @@ export function useHealthCheck<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getHealthCheckQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get server feature capabilities
+ */
+export const getGetCapabilitiesUrl = () => {
+  return `/api/capabilities`;
+};
+
+export const getCapabilities = async (
+  options?: RequestInit,
+): Promise<CapabilitiesResponse> => {
+  return customFetch<CapabilitiesResponse>(getGetCapabilitiesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetCapabilitiesQueryKey = () => {
+  return [`/api/capabilities`] as const;
+};
+
+export const getGetCapabilitiesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getCapabilities>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getCapabilities>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetCapabilitiesQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getCapabilities>>> = ({
+    signal,
+  }) => getCapabilities({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getCapabilities>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetCapabilitiesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getCapabilities>>
+>;
+export type GetCapabilitiesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get server feature capabilities
+ */
+
+export function useGetCapabilities<
+  TData = Awaited<ReturnType<typeof getCapabilities>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getCapabilities>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetCapabilitiesQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
@@ -996,6 +1075,189 @@ export const useRegenerateRecipe = <
 };
 
 /**
+ * @summary Regenerate the full menu for a date
+ */
+export const getRegenerateMenuUrl = () => {
+  return `/api/recipes/regenerate-menu`;
+};
+
+export const regenerateMenu = async (
+  regenerateMenuRequest?: RegenerateMenuRequest,
+  options?: RequestInit,
+): Promise<DailyRecipesResponse> => {
+  return customFetch<DailyRecipesResponse>(getRegenerateMenuUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(regenerateMenuRequest),
+  });
+};
+
+export const getRegenerateMenuMutationOptions = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof regenerateMenu>>,
+    TError,
+    { data: BodyType<RegenerateMenuRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof regenerateMenu>>,
+  TError,
+  { data: BodyType<RegenerateMenuRequest> },
+  TContext
+> => {
+  const mutationKey = ["regenerateMenu"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof regenerateMenu>>,
+    { data: BodyType<RegenerateMenuRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return regenerateMenu(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RegenerateMenuMutationResult = NonNullable<
+  Awaited<ReturnType<typeof regenerateMenu>>
+>;
+export type RegenerateMenuMutationBody = BodyType<RegenerateMenuRequest>;
+export type RegenerateMenuMutationError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Regenerate the full menu for a date
+ */
+export const useRegenerateMenu = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof regenerateMenu>>,
+    TError,
+    { data: BodyType<RegenerateMenuRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof regenerateMenu>>,
+  TError,
+  { data: BodyType<RegenerateMenuRequest> },
+  TContext
+> => {
+  return useMutation(getRegenerateMenuMutationOptions(options));
+};
+
+/**
+ * @summary Get generated meal history for recent days
+ */
+export const getGetRecipeHistoryUrl = (params?: GetRecipeHistoryParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/recipes/history?${stringifiedParams}`
+    : `/api/recipes/history`;
+};
+
+export const getRecipeHistory = async (
+  params?: GetRecipeHistoryParams,
+  options?: RequestInit,
+): Promise<MealHistoryResponse> => {
+  return customFetch<MealHistoryResponse>(getGetRecipeHistoryUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetRecipeHistoryQueryKey = (
+  params?: GetRecipeHistoryParams,
+) => {
+  return [`/api/recipes/history`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetRecipeHistoryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getRecipeHistory>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(
+  params?: GetRecipeHistoryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRecipeHistory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetRecipeHistoryQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getRecipeHistory>>
+  > = ({ signal }) => getRecipeHistory(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getRecipeHistory>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetRecipeHistoryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getRecipeHistory>>
+>;
+export type GetRecipeHistoryQueryError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Get generated meal history for recent days
+ */
+
+export function useGetRecipeHistory<
+  TData = Awaited<ReturnType<typeof getRecipeHistory>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(
+  params?: GetRecipeHistoryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRecipeHistory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetRecipeHistoryQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * @summary Get all saved recipes
  */
 export const getGetSavedRecipesUrl = () => {
@@ -1511,7 +1773,7 @@ export const useToggleShoppingItem = <
 /**
  * @summary Find nearby grocery stores
  */
-export const getGetNearbyStoresUrl = (params: GetNearbyStoresParams) => {
+export const getGetNearbyStoresUrl = (params?: GetNearbyStoresParams) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -1528,7 +1790,7 @@ export const getGetNearbyStoresUrl = (params: GetNearbyStoresParams) => {
 };
 
 export const getNearbyStores = async (
-  params: GetNearbyStoresParams,
+  params?: GetNearbyStoresParams,
   options?: RequestInit,
 ): Promise<NearbyStoresResponse> => {
   return customFetch<NearbyStoresResponse>(getGetNearbyStoresUrl(params), {
@@ -1545,7 +1807,7 @@ export const getGetNearbyStoresQueryOptions = <
   TData = Awaited<ReturnType<typeof getNearbyStores>>,
   TError = ErrorType<ErrorEnvelope>,
 >(
-  params: GetNearbyStoresParams,
+  params?: GetNearbyStoresParams,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof getNearbyStores>>,
@@ -1583,7 +1845,7 @@ export function useGetNearbyStores<
   TData = Awaited<ReturnType<typeof getNearbyStores>>,
   TError = ErrorType<ErrorEnvelope>,
 >(
-  params: GetNearbyStoresParams,
+  params?: GetNearbyStoresParams,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof getNearbyStores>>,

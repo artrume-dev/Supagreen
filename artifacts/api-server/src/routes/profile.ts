@@ -4,10 +4,19 @@ import {
   UpdateProfileBody,
   UpdateProfileResponse,
 } from "@workspace/api-zod";
-import { db, userProfilesTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import {
+  db,
+  userProfilesTable,
+  dailyRecipesTable,
+  shoppingListsTable,
+} from "@workspace/db";
+import { and, eq } from "drizzle-orm";
 
 const router: IRouter = Router();
+
+function todayDate(): string {
+  return new Date().toISOString().split("T")[0];
+}
 
 router.get("/profile", async (req: Request, res: Response) => {
   const [profile] = await db
@@ -45,11 +54,12 @@ router.put("/profile", async (req: Request, res: Response) => {
   }
 
   const data = parsed.data;
+  const userId = req.user!.id;
 
   const [profile] = await db
     .insert(userProfilesTable)
     .values({
-      userId: req.user!.id,
+      userId,
       dietType: data.dietType,
       allergies: data.allergies,
       healthGoal: data.healthGoal,
@@ -76,6 +86,25 @@ router.put("/profile", async (req: Request, res: Response) => {
       },
     })
     .returning();
+
+  const date = todayDate();
+  await db
+    .delete(dailyRecipesTable)
+    .where(
+      and(
+        eq(dailyRecipesTable.userId, userId),
+        eq(dailyRecipesTable.date, date),
+      ),
+    );
+
+  await db
+    .delete(shoppingListsTable)
+    .where(
+      and(
+        eq(shoppingListsTable.userId, userId),
+        eq(shoppingListsTable.date, date),
+      ),
+    );
 
   res.json(
     UpdateProfileResponse.parse({

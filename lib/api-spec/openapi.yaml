@@ -35,6 +35,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
 
+  /capabilities:
+    get:
+      operationId: getCapabilities
+      tags: [health]
+      summary: Get server feature capabilities
+      responses:
+        "200":
+          description: Feature flags supported by backend
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CapabilitiesResponse"
+
   /me:
     get:
       tags: [Auth]
@@ -244,6 +257,64 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
 
+  /recipes/regenerate-menu:
+    post:
+      tags: [recipes]
+      operationId: regenerateMenu
+      summary: Regenerate the full menu for a date
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegenerateMenuRequest'
+      responses:
+        '200':
+          description: Regenerated daily recipes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyRecipesResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /recipes/history:
+    get:
+      tags: [recipes]
+      operationId: getRecipeHistory
+      summary: Get generated meal history for recent days
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+        - name: days
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 120
+            default: 30
+      responses:
+        '200':
+          description: Grouped meal history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MealHistoryResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
   /saved-recipes:
     get:
       tags: [recipes]
@@ -411,14 +482,16 @@ paths:
         - $ref: '#/components/parameters/SessionCookie'
         - name: lat
           in: query
-          required: true
+          required: false
           schema:
             type: number
+          description: Latitude. If omitted, backend falls back to saved profile location.
         - name: lng
           in: query
-          required: true
+          required: false
           schema:
             type: number
+          description: Longitude. If omitted, backend falls back to saved profile location.
         - name: radius
           in: query
           required: false
@@ -512,6 +585,16 @@ components:
           type: string
       required:
         - status
+    CapabilitiesResponse:
+      type: object
+      required: [features]
+      properties:
+        features:
+          type: object
+          required: [mealHistory]
+          properties:
+            mealHistory:
+              type: boolean
 
     AuthUser:
       type: object
@@ -745,6 +828,42 @@ components:
         date:
           type: string
           format: date
+    MealHistoryRecipe:
+      type: object
+      required: [id, mealType, recipe, date, wasRegenerated]
+      properties:
+        id:
+          type: string
+        mealType:
+          type: string
+        recipe:
+          $ref: '#/components/schemas/RecipeObject'
+        date:
+          type: string
+          format: date
+        wasRegenerated:
+          type: boolean
+    MealHistoryDay:
+      type: object
+      required: [date, recipes]
+      properties:
+        date:
+          type: string
+          format: date
+        recipes:
+          type: array
+          items:
+            $ref: '#/components/schemas/MealHistoryRecipe'
+    MealHistoryResponse:
+      type: object
+      required: [days, totalMeals]
+      properties:
+        days:
+          type: array
+          items:
+            $ref: '#/components/schemas/MealHistoryDay'
+        totalMeals:
+          type: integer
 
     RegenerateRecipeRequest:
       type: object
@@ -753,6 +872,12 @@ components:
         mealType:
           type: string
           description: The meal slot to regenerate (breakfast, lunch, dinner, treat)
+        date:
+          type: string
+          format: date
+    RegenerateMenuRequest:
+      type: object
+      properties:
         date:
           type: string
           format: date

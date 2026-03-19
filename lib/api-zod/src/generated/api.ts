@@ -16,6 +16,15 @@ export const HealthCheckResponse = zod.object({
 });
 
 /**
+ * @summary Get server feature capabilities
+ */
+export const GetCapabilitiesResponse = zod.object({
+  features: zod.object({
+    mealHistory: zod.boolean(),
+  }),
+});
+
+/**
  * @summary Get the currently authenticated user
  */
 export const GetCurrentUserHeader = zod.object({
@@ -293,6 +302,146 @@ export const RegenerateRecipeResponse = zod.object({
 });
 
 /**
+ * @summary Regenerate the full menu for a date
+ */
+export const RegenerateMenuHeader = zod.object({
+  Authorization: zod
+    .string()
+    .optional()
+    .describe("Opaque session token — `Bearer <sid>`."),
+});
+
+export const RegenerateMenuBody = zod.object({
+  date: zod.date().optional(),
+});
+
+export const RegenerateMenuResponse = zod.object({
+  recipes: zod.array(
+    zod.object({
+      id: zod.string(),
+      mealType: zod.string(),
+      recipe: zod.object({
+        meal: zod.string().optional(),
+        title: zod.string().optional(),
+        emoji: zod.string().optional(),
+        description: zod.string().optional(),
+        prepTime: zod.number().optional(),
+        cookTime: zod.number().optional(),
+        servings: zod.number().optional(),
+        healthScore: zod.number().optional(),
+        goalAlignment: zod.string().optional(),
+        macros: zod
+          .object({
+            calories: zod.number().optional(),
+            protein: zod.number().optional(),
+            carbs: zod.number().optional(),
+            fat: zod.number().optional(),
+          })
+          .optional(),
+        calories: zod.number().optional(),
+        protein: zod.number().optional(),
+        carbs: zod.number().optional(),
+        fat: zod.number().optional(),
+        ingredients: zod
+          .array(
+            zod.object({
+              name: zod.string().optional(),
+              amount: zod.string().optional(),
+              unit: zod.string().optional(),
+              isKeyIngredient: zod.boolean().optional(),
+            }),
+          )
+          .optional(),
+        steps: zod.array(zod.string()).optional(),
+        healthBenefits: zod.array(zod.string()).optional(),
+        swapSuggestion: zod.string().optional(),
+        tags: zod.array(zod.string()).optional(),
+        imageUrl: zod.string().nullish(),
+      }),
+      date: zod.date(),
+      wasRegenerated: zod.boolean().optional(),
+    }),
+  ),
+  date: zod.date(),
+});
+
+/**
+ * @summary Get generated meal history for recent days
+ */
+export const getRecipeHistoryQueryDaysDefault = 30;
+export const getRecipeHistoryQueryDaysMax = 120;
+
+export const GetRecipeHistoryQueryParams = zod.object({
+  days: zod.coerce
+    .number()
+    .min(1)
+    .max(getRecipeHistoryQueryDaysMax)
+    .default(getRecipeHistoryQueryDaysDefault),
+});
+
+export const GetRecipeHistoryHeader = zod.object({
+  Authorization: zod
+    .string()
+    .optional()
+    .describe("Opaque session token — `Bearer <sid>`."),
+});
+
+export const GetRecipeHistoryResponse = zod.object({
+  days: zod.array(
+    zod.object({
+      date: zod.date(),
+      recipes: zod.array(
+        zod.object({
+          id: zod.string(),
+          mealType: zod.string(),
+          recipe: zod.object({
+            meal: zod.string().optional(),
+            title: zod.string().optional(),
+            emoji: zod.string().optional(),
+            description: zod.string().optional(),
+            prepTime: zod.number().optional(),
+            cookTime: zod.number().optional(),
+            servings: zod.number().optional(),
+            healthScore: zod.number().optional(),
+            goalAlignment: zod.string().optional(),
+            macros: zod
+              .object({
+                calories: zod.number().optional(),
+                protein: zod.number().optional(),
+                carbs: zod.number().optional(),
+                fat: zod.number().optional(),
+              })
+              .optional(),
+            calories: zod.number().optional(),
+            protein: zod.number().optional(),
+            carbs: zod.number().optional(),
+            fat: zod.number().optional(),
+            ingredients: zod
+              .array(
+                zod.object({
+                  name: zod.string().optional(),
+                  amount: zod.string().optional(),
+                  unit: zod.string().optional(),
+                  isKeyIngredient: zod.boolean().optional(),
+                }),
+              )
+              .optional(),
+            steps: zod.array(zod.string()).optional(),
+            healthBenefits: zod.array(zod.string()).optional(),
+            swapSuggestion: zod.string().optional(),
+            tags: zod.array(zod.string()).optional(),
+            imageUrl: zod.string().nullish(),
+          }),
+          date: zod.date(),
+          wasRegenerated: zod.boolean(),
+        }),
+      ),
+    }),
+  ),
+  totalMeals: zod.number(),
+});
+
+/**
  * @summary Get all saved recipes
  */
 export const GetSavedRecipesHeader = zod.object({
@@ -519,8 +668,18 @@ export const ToggleShoppingItemResponse = zod.object({
 export const getNearbyStoresQueryRadiusDefault = 3000;
 
 export const GetNearbyStoresQueryParams = zod.object({
-  lat: zod.coerce.number(),
-  lng: zod.coerce.number(),
+  lat: zod.coerce
+    .number()
+    .optional()
+    .describe(
+      "Latitude. If omitted, backend falls back to saved profile location.",
+    ),
+  lng: zod.coerce
+    .number()
+    .optional()
+    .describe(
+      "Longitude. If omitted, backend falls back to saved profile location.",
+    ),
   radius: zod.coerce.number().default(getNearbyStoresQueryRadiusDefault),
 });
 

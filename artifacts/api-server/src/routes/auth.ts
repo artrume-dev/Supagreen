@@ -16,6 +16,7 @@ import {
   SESSION_COOKIE,
   SESSION_TTL,
   ISSUER_URL,
+  getOidcClientId,
   type SessionData,
 } from "../lib/auth";
 
@@ -23,38 +24,161 @@ const OIDC_COOKIE_TTL = 10 * 60 * 1000;
 
 const router: IRouter = Router();
 
+function isPrivateHostname(hostname: string): boolean {
+  const lower = hostname.toLowerCase();
+  if (lower === "localhost" || lower === "127.0.0.1" || lower === "::1") {
+    return true;
+  }
+
+  const ipv4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(lower);
+  if (!ipv4) return false;
+
+  const octets = ipv4.slice(1).map((part) => Number(part));
+  if (octets.some((value) => Number.isNaN(value) || value < 0 || value > 255)) {
+    return false;
+  }
+
+  // RFC1918 private ranges + link-local range.
+  if (octets[0] === 10) return true;
+  if (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) return true;
+  if (octets[0] === 192 && octets[1] === 168) return true;
+  if (octets[0] === 169 && octets[1] === 254) return true;
+  return false;
+}
+
 function getOrigin(req: Request): string {
-  const proto = req.headers["x-forwarded-proto"] || "https";
+  const publicOrigin = process.env.PUBLIC_OAUTH_ORIGIN?.trim();
+  if (publicOrigin) {
+    return publicOrigin.replace(/\/+$/, "");
+  }
+
+  const proto = req.headers["x-forwarded-proto"] || req.protocol || "http";
   const host =
     req.headers["x-forwarded-host"] || req.headers["host"] || "localhost";
   return `${proto}://${host}`;
 }
 
-function setSessionCookie(res: Response, sid: string) {
+function getAppOrigin(req: Request): string {
+  const fallback = getOrigin(req);
+  const fallbackHost = new URL(fallback).host;
+  const originHeader = req.headers.origin;
+
+  if (typeof originHeader === "string") {
+    try {
+      const parsed = new URL(originHeader);
+      if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+        if (parsed.host === fallbackHost) {
+          return `${parsed.protocol}//${parsed.host}`;
+        }
+      }
+    } catch {
+      // ignore malformed origin header and use fallback
+    }
+  }
+
+  const refererHeader = req.headers.referer;
+  if (typeof refererHeader === "string") {
+    try {
+      const parsed = new URL(refererHeader);
+      if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+        if (parsed.host === fallbackHost) {
+          return `${parsed.protocol}//${parsed.host}`;
+        }
+      }
+    } catch {
+      // ignore malformed referer and use fallback
+    }
+  }
+
+  return fallback;
+}
+
+function getSafeLogoutReturnTo(value: unknown, appOrigin: string): string {
+  if (typeof value !== "string" || !value.trim()) {
+    return appOrigin;
+  }
+
+  try {
+    const parsed = new URL(value);
+    const app = new URL(appOrigin);
+    const sameHost = parsed.host === app.host;
+    const sameLocalHostname =
+      parsed.hostname === app.hostname &&
+      (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1");
+    const httpProtocol =
+      parsed.protocol === "http:" || parsed.protocol === "https:";
+    if ((sameHost || sameLocalHostname) && httpProtocol) {
+      return parsed.toString();
+    }
+  } catch {
+    // ignore malformed URL and use app origin fallback
+  }
+
+  return appOrigin;
+}
+
+function shouldUseSecureCookies(req: Request): boolean {
+  const forwardedProto = req.headers["x-forwarded-proto"];
+  const proto = Array.isArray(forwardedProto) ? forwardedProto[0] : forwardedProto;
+  const isHttps = proto === "https" || req.protocol === "https";
+  return process.env.NODE_ENV === "production" || isHttps;
+}
+
+function setSessionCookie(req: Request, res: Response, sid: string) {
   res.cookie(SESSION_COOKIE, sid, {
     httpOnly: true,
-    secure: true,
+    secure: shouldUseSecureCookies(req),
     sameSite: "lax",
     path: "/",
     maxAge: SESSION_TTL,
   });
 }
 
-function setOidcCookie(res: Response, name: string, value: string) {
+function setOidcCookie(req: Request, res: Response, name: string, value: string) {
   res.cookie(name, value, {
     httpOnly: true,
-    secure: true,
+    secure: shouldUseSecureCookies(req),
     sameSite: "lax",
     path: "/",
     maxAge: OIDC_COOKIE_TTL,
   });
 }
 
-function getSafeReturnTo(value: unknown): string {
-  if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
-    return "/";
+function getSafeReturnTo(value: unknown, appOrigin: string): string {
+  if (typeof value !== "string" || !value.trim()) {
+    return `${appOrigin}/app`;
   }
-  return value;
+
+  // Allow trusted custom-scheme deep links for native mobile auth handoff.
+  if (
+    value.startsWith("mobile-app://") ||
+    value.startsWith("exp://") ||
+    value.startsWith("exps://")
+  ) {
+    return value;
+  }
+
+  if (value.startsWith("/") && !value.startsWith("//")) {
+    return `${appOrigin}${value}`;
+  }
+
+  try {
+    const parsed = new URL(value);
+    const app = new URL(appOrigin);
+    const sameHost = parsed.host === app.host;
+    const sameLocalHostname =
+      parsed.hostname === app.hostname &&
+      (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1");
+    const httpProtocol =
+      parsed.protocol === "http:" || parsed.protocol === "https:";
+    if ((sameHost || sameLocalHostname) && httpProtocol) {
+      return parsed.toString();
+    }
+  } catch {
+    // ignore malformed URL and fall back to app origin default
+  }
+
+  return `${appOrigin}/app`;
 }
 
 async function upsertUser(claims: Record<string, unknown>) {
@@ -93,28 +217,42 @@ router.get("/me", (req: Request, res: Response) => {
 router.get("/login", async (req: Request, res: Response) => {
   const config = await getOidcConfig();
   const callbackUrl = `${getOrigin(req)}/api/callback`;
+  const callbackHost = new URL(callbackUrl).hostname;
+  const isGoogleIssuer = ISSUER_URL.includes("accounts.google.com");
+  const appOrigin = getAppOrigin(req);
 
-  const returnTo = getSafeReturnTo(req.query.returnTo);
+  const returnTo = getSafeReturnTo(req.query.returnTo, appOrigin);
 
   const state = oidc.randomState();
   const nonce = oidc.randomNonce();
   const codeVerifier = oidc.randomPKCECodeVerifier();
   const codeChallenge = await oidc.calculatePKCECodeChallenge(codeVerifier);
 
-  const redirectTo = oidc.buildAuthorizationUrl(config, {
+  const authorizationParams: Record<string, string> = {
     redirect_uri: callbackUrl,
-    scope: "openid email profile offline_access",
+    scope: isGoogleIssuer
+      ? "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile"
+      : "openid email profile offline_access",
     code_challenge: codeChallenge,
     code_challenge_method: "S256",
     prompt: "login consent",
+    ...(isGoogleIssuer ? { access_type: "offline" } : {}),
     state,
     nonce,
-  });
+  };
 
-  setOidcCookie(res, "code_verifier", codeVerifier);
-  setOidcCookie(res, "nonce", nonce);
-  setOidcCookie(res, "state", state);
-  setOidcCookie(res, "return_to", returnTo);
+  if (isGoogleIssuer && isPrivateHostname(callbackHost)) {
+    // Google requires these fields when using private-IP redirect URIs.
+    authorizationParams.device_id = state;
+    authorizationParams.device_name = "Recipe Genie Dev";
+  }
+
+  const redirectTo = oidc.buildAuthorizationUrl(config, authorizationParams);
+
+  setOidcCookie(req, res, "code_verifier", codeVerifier);
+  setOidcCookie(req, res, "nonce", nonce);
+  setOidcCookie(req, res, "state", state);
+  setOidcCookie(req, res, "return_to", returnTo);
 
   res.redirect(redirectTo.href);
 });
@@ -124,13 +262,15 @@ router.get("/login", async (req: Request, res: Response) => {
 router.get("/callback", async (req: Request, res: Response) => {
   const config = await getOidcConfig();
   const callbackUrl = `${getOrigin(req)}/api/callback`;
+  const appOrigin = getAppOrigin(req);
+  const loginFallback = `/api/login?returnTo=${encodeURIComponent(`${appOrigin}/app`)}`;
 
   const codeVerifier = req.cookies?.code_verifier;
   const nonce = req.cookies?.nonce;
   const expectedState = req.cookies?.state;
 
   if (!codeVerifier || !expectedState) {
-    res.redirect("/api/login");
+    res.redirect(loginFallback);
     return;
   }
 
@@ -147,11 +287,11 @@ router.get("/callback", async (req: Request, res: Response) => {
       idTokenExpected: true,
     });
   } catch {
-    res.redirect("/api/login");
+    res.redirect(loginFallback);
     return;
   }
 
-  const returnTo = getSafeReturnTo(req.cookies?.return_to);
+  const returnTo = getSafeReturnTo(req.cookies?.return_to, appOrigin);
 
   res.clearCookie("code_verifier", { path: "/" });
   res.clearCookie("nonce", { path: "/" });
@@ -160,7 +300,7 @@ router.get("/callback", async (req: Request, res: Response) => {
 
   const claims = tokens.claims();
   if (!claims) {
-    res.redirect("/api/login");
+    res.redirect(loginFallback);
     return;
   }
 
@@ -183,23 +323,44 @@ router.get("/callback", async (req: Request, res: Response) => {
   };
 
   const sid = await createSession(sessionData);
-  setSessionCookie(res, sid);
+  setSessionCookie(req, res, sid);
+
+  if (
+    returnTo.startsWith("mobile-app://") ||
+    returnTo.startsWith("exp://") ||
+    returnTo.startsWith("exps://")
+  ) {
+    try {
+      const redirect = new URL(returnTo);
+      redirect.searchParams.set("sid", sid);
+      res.redirect(redirect.toString());
+      return;
+    } catch {
+      // Fallback to default browser redirect if custom URL parsing fails.
+    }
+  }
+
   res.redirect(returnTo);
 });
 
 router.get("/auth/logout", async (req: Request, res: Response) => {
-  const config = await getOidcConfig();
-  const origin = getOrigin(req);
+  const appOrigin = getAppOrigin(req);
+  const returnTo = getSafeLogoutReturnTo(req.query.returnTo, appOrigin);
 
   const sid = getSessionId(req);
   await clearSession(res, sid);
 
-  const endSessionUrl = oidc.buildEndSessionUrl(config, {
-    client_id: process.env.REPL_ID!,
-    post_logout_redirect_uri: origin,
-  });
-
-  res.redirect(endSessionUrl.href);
+  try {
+    const config = await getOidcConfig();
+    const endSessionUrl = oidc.buildEndSessionUrl(config, {
+      client_id: getOidcClientId(),
+      post_logout_redirect_uri: returnTo,
+    });
+    res.redirect(endSessionUrl.href);
+  } catch {
+    // Some providers (e.g. Google) may not expose RP-initiated logout.
+    res.redirect(returnTo);
+  }
 });
 
 router.post(
@@ -260,6 +421,41 @@ router.post(
     }
   },
 );
+
+let cachedDiscovery: { authorization_endpoint: string } | null = null;
+
+router.get("/mobile-auth/config", async (_req: Request, res: Response) => {
+  const clientId = getOidcClientId();
+  const isGoogleIssuer = ISSUER_URL.includes("accounts.google.com");
+  const scope = isGoogleIssuer
+    ? "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile"
+    : "openid email profile offline_access";
+
+  if (!cachedDiscovery) {
+    try {
+      const discoveryUrl = `${ISSUER_URL.replace(/\/$/, "")}/.well-known/openid-configuration`;
+      const resFetch = await fetch(discoveryUrl);
+      const discovery = (await resFetch.json()) as { authorization_endpoint?: string };
+      if (discovery.authorization_endpoint) {
+        cachedDiscovery = { authorization_endpoint: discovery.authorization_endpoint };
+      }
+    } catch (e) {
+      console.warn("OIDC discovery fetch failed, using default:", e);
+    }
+    if (!cachedDiscovery && isGoogleIssuer) {
+      cachedDiscovery = {
+        authorization_endpoint: "https://accounts.google.com/o/oauth2/v2/auth",
+      };
+    }
+  }
+
+  res.json({
+    clientId,
+    issuerUrl: ISSUER_URL,
+    authorizationEndpoint: cachedDiscovery?.authorization_endpoint ?? `${ISSUER_URL.replace(/\/$/, "")}/oauth2/auth`,
+    scope,
+  });
+});
 
 router.post("/mobile-auth/logout", async (req: Request, res: Response) => {
   const sid = getSessionId(req);

@@ -1,9 +1,11 @@
 import { Feather, Ionicons } from "@expo/vector-icons";
 import type { ComponentProps } from "react";
+import { router, useLocalSearchParams } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
 import {
   ActivityIndicator,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -18,12 +20,14 @@ import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 
 import Colors from "@/constants/colors";
+import { getNearbyStoresFlexible } from "@/features/shopping/stores";
+import { getTodayDateString } from "@/features/common/date";
+import { useAuth } from "@/lib/auth";
 import {
+  getGetProfileQueryOptions,
   getGetShoppingListQueryOptions,
   useToggleShoppingItem,
   getGetShoppingListQueryKey,
-  customFetch,
-  type NearbyStoresResponse,
 } from "@workspace/api-client-react";
 
 type IoniconsName = ComponentProps<typeof Ionicons>["name"];
@@ -36,34 +40,101 @@ const categoryIconMap: Record<string, IoniconsName> = {
   Dairy: "water",
 };
 const defaultCategoryIcon: IoniconsName = "ellipsis-horizontal";
+const SECTION_SPACING = 24;
+type ShoppingItem = {
+  name: string;
+  amount: string;
+  unit: string;
+  category: string;
+  checked?: boolean;
+};
 
 export default function ShoppingScreen() {
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
+  const { user, isLoading: authLoading } = useAuth();
   const queryClient = useQueryClient();
-  const todayDate = new Date().toISOString().split("T")[0];
+  const params = useLocalSearchParams<{
+    from?: string;
+    recipeId?: string;
+    date?: string;
+    selected?: string;
+  }>();
+  const todayDate =
+    typeof params.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(params.date)
+      ? params.date
+      : getTodayDateString();
+  const fromRecipe = params.from === "recipe";
 
-  const { data: shoppingData, isLoading } = useQuery({
+  const selectedNames = (() => {
+    if (!params.selected || typeof params.selected !== "string") return [];
+    try {
+      const parsed = JSON.parse(params.selected);
+      return Array.isArray(parsed) ? parsed.filter((item) => typeof item === "string") : [];
+    } catch {
+      return [];
+    }
+  })();
+  const normalizeName = (value: string) => value.trim().replace(/\s+/g, " ").toLowerCase();
+  const selectedNameSet = new Set(selectedNames.map(normalizeName));
+
+  React.useEffect(() => {
+    if (authLoading || !user) return;
+    queryClient.invalidateQueries({
+      queryKey: getGetShoppingListQueryKey({ date: todayDate }),
+    });
+  }, [authLoading, user, queryClient, todayDate, params.from, params.recipeId, params.selected]);
+
+  const {
+    data: shoppingData,
+    isLoading,
+    isError,
+    error,
+    refetch: refetchShopping,
+  } = useQuery({
     ...getGetShoppingListQueryOptions({ date: todayDate }),
+    enabled: !authLoading && !!user,
+  });
+
+  const { data: profileData } = useQuery({
+    ...getGetProfileQueryOptions(),
+    enabled: !authLoading && !!user,
   });
 
   const { data: storesData } = useQuery({
-    queryKey: ["nearbyStores"],
+    queryKey: [
+      "nearbyStores",
+      profileData?.profile?.lat ?? null,
+      profileData?.profile?.lng ?? null,
+    ],
     queryFn: () =>
-      customFetch<NearbyStoresResponse>("/api/shopping-list/stores", {
-        method: "GET",
+      getNearbyStoresFlexible({
+        lat: profileData?.profile?.lat ?? undefined,
+        lng: profileData?.profile?.lng ?? undefined,
+        radius: 5000,
       }),
+    enabled: !authLoading && !!user,
   });
 
   const toggleMutation = useToggleShoppingItem({
     mutation: {
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getGetShoppingListQueryKey() });
+        queryClient.invalidateQueries({
+          queryKey: getGetShoppingListQueryKey({ date: todayDate }),
+        });
       },
     },
   });
 
-  const items = shoppingData?.items || [];
+  const allItems = shoppingData?.items ?? [];
+  const filteredItems =
+    fromRecipe && selectedNameSet.size > 0
+      ? allItems.filter((item) => selectedNameSet.has(normalizeName(item.name)))
+      : allItems;
+  const items =
+    fromRecipe && selectedNameSet.size > 0 && filteredItems.length === 0
+      ? allItems
+      : filteredItems;
   const stores = storesData?.stores || [];
 
   const grouped = items.reduce(
@@ -97,6 +168,19 @@ export default function ShoppingScreen() {
     Alert.alert("Copied", "Shopping list copied to clipboard");
   };
 
+  const handleNavigateToStore = async (mapsLink: string) => {
+    try {
+      const supported = await Linking.canOpenURL(mapsLink);
+      if (!supported) {
+        Alert.alert("Navigation unavailable", "Could not open map link for this store.");
+        return;
+      }
+      await Linking.openURL(mapsLink);
+    } catch {
+      Alert.alert("Navigation unavailable", "Could not open map link for this store.");
+    }
+  };
+
   if (isLoading) {
     return (
       <View style={[styles.container, { paddingTop: isWeb ? 67 : insets.top }]}>
@@ -108,21 +192,70 @@ export default function ShoppingScreen() {
     );
   }
 
+  if (!authLoading && !user) {
+    return (
+      <View style={[styles.container, { paddingTop: isWeb ? 67 : insets.top }]}>
+        <View style={styles.loadingContainer}>
+          <Feather name="lock" size={36} color={Colors.textSecondary} />
+          <Text style={styles.loadingText}>Sign in required to view shopping list</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (isError) {
+    const message = error instanceof Error ? error.message : "Could not load shopping list";
+    return (
+      <View style={[styles.container, { paddingTop: isWeb ? 67 : insets.top }]}>
+        <View style={styles.loadingContainer}>
+          <Feather name="alert-circle" size={36} color={Colors.error} />
+          <Text style={styles.loadingText}>{message}</Text>
+          <Pressable onPress={() => refetchShopping()} style={styles.backBtn}>
+            <Text style={styles.itemName}>Retry</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
   const progressPct = totalItems > 0 ? (checkedCount / totalItems) * 100 : 0;
 
   return (
     <View style={[styles.container, { paddingTop: isWeb ? 67 : insets.top }]}>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Shopping List</Text>
-          <Text style={styles.subtitle}>
-            {checkedCount} of {totalItems} items checked
-          </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          {fromRecipe ? (
+            <Pressable
+              onPress={() =>
+                params.recipeId
+                  ? router.push({
+                      pathname: "/recipe/[id]",
+                      params: { id: String(params.recipeId) },
+                    })
+                  : router.push("/(tabs)")
+              }
+              style={styles.backBtn}
+            >
+              <Feather name="arrow-left" size={16} color={Colors.textSecondary} />
+            </Pressable>
+          ) : null}
+          <View>
+            <Text style={styles.title}>{fromRecipe ? "Selected items" : "Shopping List"}</Text>
+            <Text style={styles.subtitle}>
+              {checkedCount} of {totalItems} items checked
+            </Text>
+          </View>
         </View>
         <Pressable onPress={handleCopyAll} style={styles.shareBtn}>
           <Feather name="share" size={18} color={Colors.primary} />
         </Pressable>
       </View>
+
+      {fromRecipe ? (
+        <Text style={styles.filterMeta}>
+          Showing {totalItems} item{totalItems === 1 ? "" : "s"} from selected recipe
+        </Text>
+      ) : null}
 
       {totalItems > 0 && (
         <View style={styles.progressSection}>
@@ -145,6 +278,49 @@ export default function ShoppingScreen() {
         contentContainerStyle={styles.scrollContent}
         contentInsetAdjustmentBehavior="automatic"
       >
+        {stores.length > 0 && (
+          <View style={styles.storesSection}>
+            <View style={styles.storesSectionHeader}>
+              <Ionicons name="location-outline" size={18} color={Colors.accent} />
+              <Text style={styles.storesSectionTitle}>
+                {fromRecipe ? "Places to buy selected ingredients" : "Nearby Stores"}
+              </Text>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.storesScrollContent}
+            >
+              {stores.slice(0, 5).map((store, idx) => (
+                <View key={`${store.name}-${idx}`} style={styles.storeCard}>
+                  <View style={styles.storeIconContainer}>
+                    <Ionicons name="storefront" size={20} color={Colors.primary} />
+                  </View>
+                  <Text style={styles.storeName} numberOfLines={1}>{store.name}</Text>
+                  <Text style={styles.storeAddress} numberOfLines={2}>
+                    {store.address}
+                  </Text>
+                  <View style={styles.storeFooter}>
+                    {store.rating != null && (
+                      <View style={styles.ratingBadge}>
+                        <Feather name="star" size={10} color={Colors.accent} />
+                        <Text style={styles.ratingText}>{store.rating.toFixed(1)}</Text>
+                      </View>
+                    )}
+                    <Pressable
+                      onPress={() => handleNavigateToStore(store.mapsLink)}
+                      style={styles.navigateAction}
+                    >
+                      <Ionicons name="navigate-outline" size={12} color={Colors.primary} />
+                      <Text style={styles.navigateText}>Navigate</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
         {totalItems === 0 ? (
           <View style={styles.emptyState}>
             <Feather
@@ -222,41 +398,6 @@ export default function ShoppingScreen() {
               );
             })}
 
-            {stores.length > 0 && (
-              <View style={styles.storesSection}>
-                <Text style={styles.storesSectionTitle}>Nearby Stores</Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.storesScrollContent}
-                >
-                  {stores.slice(0, 5).map((store, idx) => (
-                    <View key={`${store.name}-${idx}`} style={styles.storeCard}>
-                      <View style={styles.storeIconContainer}>
-                        <Ionicons name="storefront" size={20} color={Colors.primary} />
-                      </View>
-                      <Text style={styles.storeName} numberOfLines={1}>{store.name}</Text>
-                      <Text style={styles.storeAddress} numberOfLines={2}>
-                        {store.address}
-                      </Text>
-                      <View style={styles.storeFooter}>
-                        {store.rating != null && (
-                          <View style={styles.ratingBadge}>
-                            <Feather name="star" size={10} color={Colors.accent} />
-                            <Text style={styles.ratingText}>{store.rating.toFixed(1)}</Text>
-                          </View>
-                        )}
-                        {store.openNow != null && (
-                          <Text style={[styles.openText, { color: store.openNow ? Colors.primary : Colors.error }]}>
-                            {store.openNow ? "Open" : "Closed"}
-                          </Text>
-                        )}
-                      </View>
-                    </View>
-                  ))}
-                </ScrollView>
-              </View>
-            )}
           </>
         )}
       </ScrollView>
@@ -299,6 +440,23 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     marginTop: 2,
   },
+  backBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: Colors.card,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  filterMeta: {
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.primary,
+    paddingHorizontal: 20,
+    marginBottom: 8,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
   shareBtn: {
     width: 40,
     height: 40,
@@ -309,7 +467,7 @@ const styles = StyleSheet.create({
   },
   progressSection: {
     paddingHorizontal: 20,
-    paddingBottom: 12,
+    paddingBottom: SECTION_SPACING,
   },
   progressBar: {
     height: 6,
@@ -346,7 +504,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
     paddingHorizontal: 20,
-    marginBottom: 16,
+    marginBottom: SECTION_SPACING,
   },
   bulkButton: {
     flexDirection: "row",
@@ -364,7 +522,7 @@ const styles = StyleSheet.create({
   },
   aisleSection: {
     paddingHorizontal: 20,
-    marginBottom: 20,
+    marginBottom: SECTION_SPACING,
   },
   aisleHeader: {
     flexDirection: "row",
@@ -429,18 +587,22 @@ const styles = StyleSheet.create({
   itemAmount: {
     fontSize: 12,
     fontFamily: "Inter_500Medium",
-    color: Colors.textTertiary,
+    color: "rgba(74, 222, 128, 0.9)",
   },
   storesSection: {
-    marginTop: 8,
-    marginBottom: 20,
+    marginBottom: SECTION_SPACING,
+  },
+  storesSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
+    paddingHorizontal: 20,
   },
   storesSectionTitle: {
     fontSize: 16,
     fontFamily: "Inter_700Bold",
     color: Colors.text,
-    marginBottom: 12,
-    paddingHorizontal: 20,
   },
   storesScrollContent: {
     paddingHorizontal: 20,
@@ -489,8 +651,14 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
     color: Colors.text,
   },
-  openText: {
+  navigateAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  navigateText: {
     fontSize: 11,
     fontFamily: "Inter_600SemiBold",
+    color: Colors.primary,
   },
 });

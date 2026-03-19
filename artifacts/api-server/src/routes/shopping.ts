@@ -182,6 +182,10 @@ router.get("/shopping-list/stores", async (req: Request, res: Response) => {
       res.status(400).json({ error: "Invalid lat/lng query parameters" });
       return;
     }
+    if (typeof parsed.data.lat !== "number" || typeof parsed.data.lng !== "number") {
+      res.status(400).json({ error: "Both lat and lng are required when passing coordinates" });
+      return;
+    }
     lat = parsed.data.lat;
     lng = parsed.data.lng;
     radius = parsed.data.radius;

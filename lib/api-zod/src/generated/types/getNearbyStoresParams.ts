@@ -7,7 +7,13 @@
  */
 
 export type GetNearbyStoresParams = {
-  lat: number;
-  lng: number;
+  /**
+   * Latitude. If omitted, backend falls back to saved profile location.
+   */
+  lat?: number;
+  /**
+   * Longitude. If omitted, backend falls back to saved profile location.
+   */
+  lng?: number;
   radius?: number;
 };
