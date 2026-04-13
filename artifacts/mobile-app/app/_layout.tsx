@@ -14,7 +14,6 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
-import { Platform, StyleSheet, Text, View } from "react-native";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthContext, getSyncToken, useAuth, useAuthProvider } from "@/lib/auth";
@@ -33,9 +32,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const params = useGlobalSearchParams<{ edit?: string }>();
   const [hasPendingOnboarding, setHasPendingOnboarding] = useState(false);
   const [pendingCheckLoading, setPendingCheckLoading] = useState(true);
-  const [debugDecision, setDebugDecision] = useState("init");
   const [profileReady, setProfileReady] = useState(false);
-  const isHomeTab = segments[0] === "(tabs)" && segments.length === 1;
 
   // Delay profile fetch until token is settled (avoids race where React Query runs before tokenRef propagates)
   useEffect(() => {
@@ -103,11 +100,8 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       if (!inSignIn) {
         if (__DEV__) {
           console.log("[AuthGate] pending onboarding -> sign-in");
-          setDebugDecision("pending->sign-in");
         }
         router.replace("/sign-in?postOnboarding=1");
-      } else if (__DEV__) {
-        setDebugDecision("pending@sign-in");
       }
       return;
     }
@@ -116,11 +110,8 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       if (!inSignIn && !inOnboarding) {
         if (__DEV__) {
           console.log("[AuthGate] unauthenticated -> onboarding");
-          setDebugDecision("unauth->onboarding");
         }
         router.replace("/onboarding");
-      } else if (__DEV__) {
-        setDebugDecision("unauth@allowed");
       }
       return;
     }
@@ -128,16 +119,10 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     // Once authenticated, let the sign-in screen complete its own post-login
     // finalize flow. Redirecting from here can bounce users back to onboarding.
     if (inSignIn) {
-      if (__DEV__) {
-        setDebugDecision("authed@sign-in");
-      }
       return;
     }
 
     if (profileLoading) {
-      if (__DEV__) {
-        setDebugDecision("profileLoading");
-      }
       return;
     }
 
@@ -150,7 +135,6 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     if (!isProfileComplete && !inOnboarding) {
       if (__DEV__) {
         console.log("[AuthGate] authed profile incomplete -> onboarding");
-        setDebugDecision("incomplete->onboarding");
       }
       router.replace("/onboarding");
       return;
@@ -159,14 +143,9 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     if (isProfileComplete && inOnboarding && !isEditMode) {
       if (__DEV__) {
         console.log("[AuthGate] authed profile complete -> tabs");
-        setDebugDecision("complete->tabs");
       }
       router.replace("/(tabs)");
       return;
-    }
-
-    if (__DEV__) {
-      setDebugDecision("stay");
     }
   }, [
     user,
@@ -182,13 +161,6 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   return (
     <>
       {children}
-      {__DEV__ && !isHomeTab ? (
-        <View pointerEvents="none" style={styles.debugOverlay}>
-          <Text style={styles.debugText}>
-            {`seg=${segments.join("/") || "(root)"} user=${Boolean(user)} pending=${hasPendingOnboarding} pLoad=${pendingCheckLoading} authLoad=${authLoading} profileLoad=${profileLoading} decision=${debugDecision}`}
-          </Text>
-        </View>
-      ) : null}
     </>
   );
 }
@@ -264,23 +236,3 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  debugOverlay: {
-    position: "absolute",
-    left: 8,
-    right: 8,
-    bottom: 8,
-    backgroundColor: "rgba(0,0,0,0.85)",
-    borderWidth: 1,
-    borderColor: "#22c55e",
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-  },
-  debugText: {
-    color: "#22c55e",
-    fontSize: 10,
-    fontFamily: Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" }),
-  },
-});
