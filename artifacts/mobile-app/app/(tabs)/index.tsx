@@ -56,8 +56,22 @@ function parseGoalList(rawGoal: string | null | undefined): string[] {
     .filter(Boolean);
 }
 
+const GOAL_META: Record<string, { label: string; emoji: string }> = {
+  "fat-loss":    { label: "Lose Body Fat",         emoji: "🔥" },
+  "muscle":      { label: "Build Muscle",           emoji: "💪" },
+  "gut":         { label: "Improve Gut Health",     emoji: "🌿" },
+  "energy":      { label: "Boost Energy",           emoji: "⚡" },
+  "inflammation":{ label: "Reduce Inflammation",    emoji: "🧊" },
+  "wellness":    { label: "General Wellness",       emoji: "✨" },
+};
+
 function formatGoalLabel(goal: string): string {
-  return goal.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+  return GOAL_META[goal]?.label
+    ?? goal.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function goalEmoji(goal: string): string {
+  return GOAL_META[goal]?.emoji ?? "🎯";
 }
 
 function MacroRing({
@@ -566,41 +580,51 @@ export default function HomeScreen() {
         ) : (
           <>
             {(hasMultipleGoals
-              ? goalSectionsData?.sections.map((section) => section.goal) ?? selectedGoals
-              : ["daily-menu"]).map((goalKey) => (
-              <View key={goalKey} style={styles.goalSection}>
-                {goalKey !== "daily-menu" ? (
-                  <Text style={styles.goalSectionTitle}>{formatGoalLabel(goalKey)}</Text>
-                ) : null}
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.cardsRow}
-                >
-                  {(hasMultipleGoals
-                    ? (
-                        goalSectionsData?.sections.find((section) => section.goal === goalKey)
-                          ?.recipes ?? []
-                      ).map((r) => ({
-                        id: r.id,
-                        mealType: r.mealType,
-                        recipe: r.recipe as RecipeObject,
-                      }))
-                    : recipes
-                  ).map((r) => (
-                    <RecipeCard
-                      key={`${goalKey}-${r.id}`}
-                      recipe={r.recipe}
-                      mealType={r.mealType}
-                      id={r.id}
-                      onRegenerate={() => handleRegenerate(r.mealType)}
-                      isRegenerating={regeneratingMeal === r.mealType}
-                      showSwap={!hasMultipleGoals}
-                    />
-                  ))}
-                </ScrollView>
-              </View>
-            ))}
+              ? goalSectionsData?.sections.map((s) => s.goal) ?? selectedGoals
+              : selectedGoals.length > 0 ? selectedGoals : ["daily-menu"]
+            ).map((goalKey, index) => {
+              const goalRecipes = hasMultipleGoals
+                ? (goalSectionsData?.sections.find((s) => s.goal === goalKey)?.recipes ?? []).map((r) => ({
+                    id: r.id,
+                    mealType: r.mealType,
+                    recipe: r.recipe as RecipeObject,
+                  }))
+                : recipes;
+              const label = goalKey === "daily-menu" ? "Today's Menu" : formatGoalLabel(goalKey);
+              const emoji = goalKey === "daily-menu" ? "🍽" : goalEmoji(goalKey);
+              const mealCount = goalRecipes.length;
+
+              return (
+                <View key={goalKey} style={[styles.goalSection, index > 0 && styles.goalSectionSpaced]}>
+                  <View style={styles.goalSectionHeader}>
+                    <View style={styles.goalSectionPill}>
+                      <Text style={styles.goalSectionEmoji}>{emoji}</Text>
+                      <Text style={styles.goalSectionTitle}>{label}</Text>
+                    </View>
+                    {mealCount > 0 && (
+                      <Text style={styles.goalSectionCount}>{mealCount} meals</Text>
+                    )}
+                  </View>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.cardsRow}
+                  >
+                    {goalRecipes.map((r) => (
+                      <RecipeCard
+                        key={`${goalKey}-${r.id}`}
+                        recipe={r.recipe}
+                        mealType={r.mealType}
+                        id={r.id}
+                        onRegenerate={() => handleRegenerate(r.mealType)}
+                        isRegenerating={regeneratingMeal === r.mealType}
+                        showSwap={!hasMultipleGoals}
+                      />
+                    ))}
+                  </ScrollView>
+                </View>
+              );
+            })}
           </>
         )}
 
@@ -787,17 +811,46 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
   },
   goalSection: {
+    marginBottom: 6,
+  },
+  goalSectionSpaced: {
+    marginTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.06)",
+    paddingTop: 18,
+  },
+  goalSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 24,
     marginBottom: 10,
   },
+  goalSectionPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(34,197,94,0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(34,197,94,0.25)",
+    borderRadius: 24,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  goalSectionEmoji: {
+    fontSize: 16,
+    lineHeight: 20,
+  },
   goalSectionTitle: {
-    paddingHorizontal: 24,
-    marginTop: 2,
-    marginBottom: 2,
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: "Inter_700Bold",
     color: Colors.primary,
-    textTransform: "capitalize",
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
+  },
+  goalSectionCount: {
+    fontSize: 11,
+    fontFamily: "Inter_500Medium",
+    color: Colors.textTertiary,
   },
   loadingSection: {
     gap: 14,
