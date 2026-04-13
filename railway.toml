@@ -5,3 +5,4 @@ buildCommand = "pnpm --filter @workspace/api-server build"
 [deploy]
 startCommand = "pnpm --filter @workspace/api-server start"
 healthcheckPath = "/api/healthz"
+healthcheckTimeout = 60
