@@ -3,7 +3,7 @@ import type { ComponentProps } from "react";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Platform,
   Pressable,
@@ -131,6 +131,14 @@ export default function ProfileScreen() {
   const [activeTab, setActiveTab] = useState<"stats" | "saved">("stats");
   const [historyDaysFilter, setHistoryDaysFilter] = useState<7 | 30 | 90>(30);
   const [historyGoalFilter, setHistoryGoalFilter] = useState<string>("all");
+  const [historyView, setHistoryView] = useState<"list" | "calendar">("list");
+  const [listDayIndex, setListDayIndex] = useState(0);
+  const [calMonthOffset, setCalMonthOffset] = useState(0);
+  const [calSelectedDate, setCalSelectedDate] = useState<string | null>(null);
+  const swipeStartX = useRef(0);
+
+  // Reset day index when filters change
+  useEffect(() => { setListDayIndex(0); }, [historyDaysFilter, historyGoalFilter]);
 
   const { data: profileResponse } = useQuery({
     ...getGetProfileQueryOptions(),
@@ -417,64 +425,56 @@ export default function ProfileScreen() {
             <WeeklyMacroChart recipes={weekRecipes} />
 
             <View style={styles.historyCard}>
+              {/* Header */}
               <View style={styles.historyHeaderRow}>
                 <Text style={styles.historyTitle}>Meal History</Text>
-                <Text style={styles.historyCount}>
-                  {mealHistoryData?.totalMeals ?? 0} meals
-                </Text>
+                <View style={styles.historyHeaderRight}>
+                  <Text style={styles.historyCount}>{mealHistoryData?.totalMeals ?? 0} meals</Text>
+                  <View style={styles.historyViewToggle}>
+                    <Pressable
+                      onPress={() => { setHistoryView("list"); setCalSelectedDate(null); }}
+                      style={[styles.historyViewBtn, historyView === "list" && styles.historyViewBtnActive]}
+                    >
+                      <Feather name="list" size={13} color={historyView === "list" ? Colors.primary : Colors.textTertiary} />
+                    </Pressable>
+                    <Pressable
+                      onPress={() => { setHistoryView("calendar"); setCalSelectedDate(null); }}
+                      style={[styles.historyViewBtn, historyView === "calendar" && styles.historyViewBtnActive]}
+                    >
+                      <Feather name="calendar" size={13} color={historyView === "calendar" ? Colors.primary : Colors.textTertiary} />
+                    </Pressable>
+                  </View>
+                </View>
               </View>
 
               {/* Day range filters */}
               <View style={styles.historyFilters}>
-                {([7, 30, 90] as const).map((days) => (
+                {([7, 30, 90] as const).map((d) => (
                   <Pressable
-                    key={days}
-                    onPress={() => setHistoryDaysFilter(days)}
-                    style={[
-                      styles.historyFilter,
-                      historyDaysFilter === days && styles.historyFilterActive,
-                    ]}
+                    key={d}
+                    onPress={() => setHistoryDaysFilter(d)}
+                    style={[styles.historyFilter, historyDaysFilter === d && styles.historyFilterActive]}
                   >
-                    <Text
-                      style={[
-                        styles.historyFilterText,
-                        historyDaysFilter === days && styles.historyFilterTextActive,
-                      ]}
-                    >
-                      {days}d
+                    <Text style={[styles.historyFilterText, historyDaysFilter === d && styles.historyFilterTextActive]}>
+                      {d}d
                     </Text>
                   </Pressable>
                 ))}
               </View>
 
-              {/* Goal tabs — only shown when user has multiple goals */}
+              {/* Goal tabs */}
               {userGoals.length > 1 && (
                 <View style={styles.historyGoalTabs}>
-                  <Pressable
-                    onPress={() => setHistoryGoalFilter("all")}
-                    style={[
-                      styles.historyGoalTab,
-                      historyGoalFilter === "all" && styles.historyGoalTabActive,
-                    ]}
-                  >
-                    <Text style={[styles.historyGoalTabText, historyGoalFilter === "all" && styles.historyGoalTabTextActive]}>
-                      All
-                    </Text>
-                  </Pressable>
-                  {userGoals.map((g) => {
-                    const label = g.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+                  {(["all", ...userGoals] as string[]).map((g) => {
+                    const label = g === "all" ? "All" : g.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+                    const active = historyGoalFilter === g;
                     return (
                       <Pressable
                         key={g}
                         onPress={() => setHistoryGoalFilter(g)}
-                        style={[
-                          styles.historyGoalTab,
-                          historyGoalFilter === g && styles.historyGoalTabActive,
-                        ]}
+                        style={[styles.historyGoalTab, active && styles.historyGoalTabActive]}
                       >
-                        <Text style={[styles.historyGoalTabText, historyGoalFilter === g && styles.historyGoalTabTextActive]}>
-                          {label}
-                        </Text>
+                        <Text style={[styles.historyGoalTabText, active && styles.historyGoalTabTextActive]}>{label}</Text>
                       </Pressable>
                     );
                   })}
@@ -482,32 +482,24 @@ export default function ProfileScreen() {
               )}
 
               {mealHistoryLoading ? (
-                <Text style={styles.historyLoadingText}>Loading meals...</Text>
+                <Text style={styles.historyLoadingText}>Loading meals…</Text>
               ) : (() => {
                 const allDays = mealHistoryData?.days ?? [];
-
-                // For a specific goal tab: filter to only that goal's recipes
                 const filteredDays = historyGoalFilter === "all"
                   ? allDays
-                  : allDays
-                      .map((day) => ({
-                        ...day,
-                        recipes: day.recipes.filter((r) => {
-                          const json = r.recipe as Record<string, unknown>;
-                          return json.__goalKey === historyGoalFilter;
-                        }),
-                      }))
-                      .filter((day) => day.recipes.length > 0);
+                  : allDays.map((day) => ({
+                      ...day,
+                      recipes: day.recipes.filter((r) => (r.recipe as Record<string, unknown>).__goalKey === historyGoalFilter),
+                    })).filter((day) => day.recipes.length > 0);
 
                 if (filteredDays.length === 0) {
                   return <Text style={styles.historyLoadingText}>No meal history yet.</Text>;
                 }
 
+                // ── helper: render a single recipe row ──
                 const renderRecipeRow = (item: typeof filteredDays[0]["recipes"][0]) => {
                   const json = item.recipe as Record<string, unknown>;
-                  const displayMeal = typeof json.__baseMealType === "string"
-                    ? json.__baseMealType
-                    : item.mealType;
+                  const displayMeal = typeof json.__baseMealType === "string" ? json.__baseMealType : item.mealType;
                   return (
                     <Pressable
                       key={item.id}
@@ -518,64 +510,186 @@ export default function ProfileScreen() {
                         <Text style={styles.historyRecipeTitle} numberOfLines={1}>
                           {item.recipe.emoji ?? "🍽"} {item.recipe.title ?? "Untitled recipe"}
                         </Text>
-                        <Text style={styles.historyRecipeMeta}>
-                          {displayMeal} · {item.recipe.prepTime ?? 0} min
-                        </Text>
+                        <Text style={styles.historyRecipeMeta}>{displayMeal} · {item.recipe.prepTime ?? 0} min</Text>
                       </View>
                       <Feather name="chevron-right" size={14} color={Colors.textTertiary} />
                     </Pressable>
                   );
                 };
 
-                return filteredDays.slice(0, 3).map((day) => {
-                  const dateLabel = new Date(`${day.date}T00:00:00`).toLocaleDateString("en-US", {
-                    weekday: "short", month: "short", day: "numeric",
-                  });
-
-                  // "All" tab with multiple goals: group recipes by __goalKey within each day
+                // ── helper: render one day's recipe list (grouped by goal if "All") ──
+                const renderDayRecipes = (day: typeof filteredDays[0]) => {
                   if (historyGoalFilter === "all" && userGoals.length > 1) {
-                    // Bucket into: canonical (no __goalKey) + per-goal groups
                     const groups = new Map<string, typeof day.recipes>();
                     for (const r of day.recipes) {
-                      const json = r.recipe as Record<string, unknown>;
-                      const key = typeof json.__goalKey === "string" ? json.__goalKey : "_canonical";
+                      const key = (typeof (r.recipe as Record<string, unknown>).__goalKey === "string")
+                        ? (r.recipe as Record<string, unknown>).__goalKey as string
+                        : "_canonical";
                       if (!groups.has(key)) groups.set(key, []);
                       groups.get(key)!.push(r);
                     }
+                    return Array.from(groups.entries()).map(([groupKey, groupRecipes]) => (
+                      <View key={groupKey}>
+                        {groupKey !== "_canonical" && (
+                          <View style={styles.historyGoalGroupRow}>
+                            <View style={styles.historyGoalGroupDivider} />
+                            <Text style={styles.historyGoalGroupLabel}>
+                              {groupKey.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+                            </Text>
+                            <View style={styles.historyGoalGroupDivider} />
+                          </View>
+                        )}
+                        {groupRecipes.map(renderRecipeRow)}
+                      </View>
+                    ));
+                  }
+                  return day.recipes.map(renderRecipeRow);
+                };
 
+                // ══════════════════════════════
+                // CALENDAR VIEW
+                // ══════════════════════════════
+                if (historyView === "calendar") {
+                  const recipeDateSet = new Set(filteredDays.map((d) => d.date));
+                  const now = new Date();
+                  const viewDate = new Date(now.getFullYear(), now.getMonth() + calMonthOffset, 1);
+                  const year = viewDate.getFullYear();
+                  const month = viewDate.getMonth();
+                  const monthLabel = viewDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
+                  const firstDayOfWeek = (new Date(year, month, 1).getDay() + 6) % 7; // Mon=0
+                  const daysInMonth = new Date(year, month + 1, 0).getDate();
+                  const cells: (number | null)[] = [
+                    ...Array(firstDayOfWeek).fill(null),
+                    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+                  ];
+                  const dayHeaders = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+
+                  const todayStr = new Date().toISOString().split("T")[0];
+
+                  // Day detail drill-down
+                  if (calSelectedDate) {
+                    const dayData = filteredDays.find((d) => d.date === calSelectedDate);
+                    const dateLabel = new Date(`${calSelectedDate}T00:00:00`).toLocaleDateString("en-US", {
+                      weekday: "long", month: "long", day: "numeric",
+                    });
                     return (
-                      <View key={day.date} style={styles.historyDayBlock}>
-                        <Text style={styles.historyDayTitle}>{dateLabel}</Text>
-                        {Array.from(groups.entries()).map(([groupKey, groupRecipes]) => {
-                          const isGoalGroup = groupKey !== "_canonical";
-                          const groupLabel = isGoalGroup
-                            ? groupKey.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
-                            : null;
-                          return (
-                            <View key={groupKey}>
-                              {groupLabel && (
-                                <View style={styles.historyGoalGroupRow}>
-                                  <View style={styles.historyGoalGroupDivider} />
-                                  <Text style={styles.historyGoalGroupLabel}>{groupLabel}</Text>
-                                  <View style={styles.historyGoalGroupDivider} />
-                                </View>
-                              )}
-                              {groupRecipes.map(renderRecipeRow)}
-                            </View>
-                          );
-                        })}
+                      <View>
+                        <Pressable onPress={() => setCalSelectedDate(null)} style={styles.calBackBtn}>
+                          <Feather name="arrow-left" size={14} color={Colors.primary} />
+                          <Text style={styles.calBackText}>Back to Calendar</Text>
+                        </Pressable>
+                        <Text style={styles.historyDayTitle}>{dateLabel.toUpperCase()}</Text>
+                        {dayData ? renderDayRecipes(dayData) : (
+                          <Text style={styles.historyLoadingText}>No meals recorded.</Text>
+                        )}
                       </View>
                     );
                   }
 
-                  // Single goal or specific goal tab: flat list
                   return (
-                    <View key={day.date} style={styles.historyDayBlock}>
-                      <Text style={styles.historyDayTitle}>{dateLabel}</Text>
-                      {day.recipes.map(renderRecipeRow)}
+                    <View>
+                      {/* Month nav */}
+                      <View style={styles.calMonthNav}>
+                        <Pressable onPress={() => setCalMonthOffset((o) => o - 1)} style={styles.calNavBtn}>
+                          <Feather name="chevron-left" size={16} color={Colors.textSecondary} />
+                        </Pressable>
+                        <Text style={styles.calMonthLabel}>{monthLabel}</Text>
+                        <Pressable
+                          onPress={() => setCalMonthOffset((o) => Math.min(o + 1, 0))}
+                          style={[styles.calNavBtn, calMonthOffset >= 0 && styles.calNavBtnDisabled]}
+                          disabled={calMonthOffset >= 0}
+                        >
+                          <Feather name="chevron-right" size={16} color={calMonthOffset >= 0 ? Colors.textTertiary : Colors.textSecondary} />
+                        </Pressable>
+                      </View>
+
+                      {/* Day-of-week headers */}
+                      <View style={styles.calDayHeaders}>
+                        {dayHeaders.map((h) => (
+                          <Text key={h} style={styles.calDayHeader}>{h}</Text>
+                        ))}
+                      </View>
+
+                      {/* Day grid */}
+                      <View style={styles.calGrid}>
+                        {cells.map((day, i) => {
+                          if (!day) return <View key={`empty-${i}`} style={styles.calCell} />;
+                          const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+                          const hasRecipes = recipeDateSet.has(dateStr);
+                          const isToday = dateStr === todayStr;
+                          const isFuture = dateStr > todayStr;
+                          return (
+                            <Pressable
+                              key={dateStr}
+                              onPress={() => hasRecipes && setCalSelectedDate(dateStr)}
+                              style={[
+                                styles.calCell,
+                                isToday && styles.calCellToday,
+                                hasRecipes && styles.calCellHasRecipes,
+                              ]}
+                            >
+                              <Text style={[
+                                styles.calDayNum,
+                                isToday && styles.calDayNumToday,
+                                isFuture && styles.calDayNumFuture,
+                              ]}>
+                                {day}
+                              </Text>
+                              {hasRecipes && (
+                                <Feather name="coffee" size={9} color={Colors.primary} />
+                              )}
+                            </Pressable>
+                          );
+                        })}
+                      </View>
                     </View>
                   );
+                }
+
+                // ══════════════════════════════
+                // LIST VIEW — one day at a time with swipe
+                // ══════════════════════════════
+                const safeIndex = Math.min(listDayIndex, filteredDays.length - 1);
+                const currentDay = filteredDays[safeIndex];
+                const dateLabel = new Date(`${currentDay.date}T00:00:00`).toLocaleDateString("en-US", {
+                  weekday: "short", month: "short", day: "numeric",
                 });
+
+                return (
+                  <View
+                    onTouchStart={(e) => { swipeStartX.current = e.nativeEvent.pageX; }}
+                    onTouchEnd={(e) => {
+                      const dx = e.nativeEvent.pageX - swipeStartX.current;
+                      if (dx > 50 && safeIndex > 0) setListDayIndex(safeIndex - 1);
+                      else if (dx < -50 && safeIndex < filteredDays.length - 1) setListDayIndex(safeIndex + 1);
+                    }}
+                  >
+                    {/* Nav row */}
+                    <View style={styles.listNavRow}>
+                      <Pressable
+                        onPress={() => setListDayIndex(safeIndex - 1)}
+                        disabled={safeIndex === 0}
+                        style={[styles.listNavBtn, safeIndex === 0 && styles.listNavBtnDisabled]}
+                      >
+                        <Feather name="chevron-left" size={16} color={safeIndex === 0 ? Colors.textTertiary : Colors.text} />
+                      </Pressable>
+                      <View style={styles.listNavCenter}>
+                        <Text style={styles.historyDayTitle}>{dateLabel.toUpperCase()}</Text>
+                        <Text style={styles.listNavCounter}>{safeIndex + 1} / {filteredDays.length}</Text>
+                      </View>
+                      <Pressable
+                        onPress={() => setListDayIndex(safeIndex + 1)}
+                        disabled={safeIndex === filteredDays.length - 1}
+                        style={[styles.listNavBtn, safeIndex === filteredDays.length - 1 && styles.listNavBtnDisabled]}
+                      >
+                        <Feather name="chevron-right" size={16} color={safeIndex === filteredDays.length - 1 ? Colors.textTertiary : Colors.text} />
+                      </Pressable>
+                    </View>
+
+                    {renderDayRecipes(currentDay)}
+                  </View>
+                );
               })()}
             </View>
 
@@ -890,6 +1004,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
+  historyHeaderRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   historyTitle: {
     fontSize: 14,
     fontFamily: "Inter_700Bold",
@@ -899,6 +1018,18 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: "Inter_500Medium",
     color: Colors.textSecondary,
+  },
+  historyViewToggle: {
+    flexDirection: "row",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  historyViewBtn: {
+    padding: 6,
+  },
+  historyViewBtnActive: {
+    backgroundColor: "rgba(34,197,94,0.15)",
   },
   historyFilters: {
     flexDirection: "row",
@@ -927,7 +1058,7 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   historyDayBlock: {
-    gap: 6,
+    gap: 2,
     paddingTop: 4,
   },
   historyDayTitle: {
@@ -936,6 +1067,7 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     textTransform: "uppercase",
     letterSpacing: 0.3,
+    marginBottom: 4,
   },
   historyGoalTabs: {
     flexDirection: "row",
@@ -969,6 +1101,111 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 8,
+    marginBottom: 2,
+  },
+  // List view navigation
+  listNavRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  listNavBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  listNavBtnDisabled: {
+    opacity: 0.3,
+  },
+  listNavCenter: {
+    flex: 1,
+    alignItems: "center",
+    gap: 2,
+  },
+  listNavCounter: {
+    fontSize: 10,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textTertiary,
+  },
+  // Calendar styles
+  calMonthNav: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  calNavBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  calNavBtnDisabled: {
+    opacity: 0.3,
+  },
+  calMonthLabel: {
+    fontSize: 13,
+    fontFamily: "Inter_700Bold",
+    color: Colors.text,
+  },
+  calDayHeaders: {
+    flexDirection: "row",
+    marginBottom: 4,
+  },
+  calDayHeader: {
+    flex: 1,
+    textAlign: "center",
+    fontSize: 10,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.textTertiary,
+    paddingVertical: 4,
+  },
+  calGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+  },
+  calCell: {
+    width: "14.28%",
+    aspectRatio: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 2,
+    borderRadius: 8,
+  },
+  calCellToday: {
+    borderWidth: 1,
+    borderColor: "rgba(34,197,94,0.4)",
+  },
+  calCellHasRecipes: {
+    backgroundColor: "rgba(34,197,94,0.08)",
+  },
+  calDayNum: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+    color: Colors.text,
+  },
+  calDayNumToday: {
+    color: Colors.primary,
+    fontFamily: "Inter_700Bold",
+  },
+  calDayNumFuture: {
+    color: Colors.textTertiary,
+  },
+  calBackBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 12,
+  },
+  calBackText: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.primary,
   },
   historyRecipeMain: {
     flex: 1,
