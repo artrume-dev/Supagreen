@@ -485,71 +485,97 @@ export default function ProfileScreen() {
                 <Text style={styles.historyLoadingText}>Loading meals...</Text>
               ) : (() => {
                 const allDays = mealHistoryData?.days ?? [];
+
+                // For a specific goal tab: filter to only that goal's recipes
                 const filteredDays = historyGoalFilter === "all"
                   ? allDays
-                  : allDays.map((day) => ({
-                      ...day,
-                      recipes: day.recipes.filter((r) => {
-                        const json = r.recipe as Record<string, unknown>;
-                        return json.__goalKey === historyGoalFilter;
-                      }),
-                    })).filter((day) => day.recipes.length > 0);
+                  : allDays
+                      .map((day) => ({
+                        ...day,
+                        recipes: day.recipes.filter((r) => {
+                          const json = r.recipe as Record<string, unknown>;
+                          return json.__goalKey === historyGoalFilter;
+                        }),
+                      }))
+                      .filter((day) => day.recipes.length > 0);
 
                 if (filteredDays.length === 0) {
                   return <Text style={styles.historyLoadingText}>No meal history yet.</Text>;
                 }
 
-                return filteredDays.slice(0, 3).map((day) => (
-                  <View key={day.date} style={styles.historyDayBlock}>
-                    <Text style={styles.historyDayTitle}>
-                      {new Date(`${day.date}T00:00:00`).toLocaleDateString("en-US", {
-                        weekday: "short",
-                        month: "short",
-                        day: "numeric",
-                      })}
-                    </Text>
-                    {day.recipes.slice(0, 4).map((item) => {
-                      const json = item.recipe as Record<string, unknown>;
-                      const goalKey = typeof json.__goalKey === "string" ? json.__goalKey : null;
-                      const displayMeal = typeof json.__baseMealType === "string"
-                        ? json.__baseMealType
-                        : item.mealType;
-                      const goalBadgeLabel = goalKey
-                        ? goalKey.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
-                        : null;
+                const renderRecipeRow = (item: typeof filteredDays[0]["recipes"][0]) => {
+                  const json = item.recipe as Record<string, unknown>;
+                  const displayMeal = typeof json.__baseMealType === "string"
+                    ? json.__baseMealType
+                    : item.mealType;
+                  return (
+                    <Pressable
+                      key={item.id}
+                      onPress={() => router.push({ pathname: "/recipe/[id]", params: { id: String(item.id) } })}
+                      style={styles.historyRecipeRow}
+                    >
+                      <View style={styles.historyRecipeMain}>
+                        <Text style={styles.historyRecipeTitle} numberOfLines={1}>
+                          {item.recipe.emoji ?? "🍽"} {item.recipe.title ?? "Untitled recipe"}
+                        </Text>
+                        <Text style={styles.historyRecipeMeta}>
+                          {displayMeal} · {item.recipe.prepTime ?? 0} min
+                        </Text>
+                      </View>
+                      <Feather name="chevron-right" size={14} color={Colors.textTertiary} />
+                    </Pressable>
+                  );
+                };
 
-                      return (
-                        <Pressable
-                          key={item.id}
-                          onPress={() =>
-                            router.push({
-                              pathname: "/recipe/[id]",
-                              params: { id: String(item.id) },
-                            })
-                          }
-                          style={styles.historyRecipeRow}
-                        >
-                          <View style={styles.historyRecipeMain}>
-                            <Text style={styles.historyRecipeTitle} numberOfLines={1}>
-                              {item.recipe.emoji ?? "🍽"} {item.recipe.title ?? "Untitled recipe"}
-                            </Text>
-                            <View style={styles.historyRecipeMetaRow}>
-                              <Text style={styles.historyRecipeMeta}>
-                                {displayMeal} · {item.recipe.prepTime ?? 0} min
-                              </Text>
-                              {goalBadgeLabel && historyGoalFilter === "all" && userGoals.length > 1 && (
-                                <View style={styles.goalBadge}>
-                                  <Text style={styles.goalBadgeText}>{goalBadgeLabel}</Text>
+                return filteredDays.slice(0, 3).map((day) => {
+                  const dateLabel = new Date(`${day.date}T00:00:00`).toLocaleDateString("en-US", {
+                    weekday: "short", month: "short", day: "numeric",
+                  });
+
+                  // "All" tab with multiple goals: group recipes by __goalKey within each day
+                  if (historyGoalFilter === "all" && userGoals.length > 1) {
+                    // Bucket into: canonical (no __goalKey) + per-goal groups
+                    const groups = new Map<string, typeof day.recipes>();
+                    for (const r of day.recipes) {
+                      const json = r.recipe as Record<string, unknown>;
+                      const key = typeof json.__goalKey === "string" ? json.__goalKey : "_canonical";
+                      if (!groups.has(key)) groups.set(key, []);
+                      groups.get(key)!.push(r);
+                    }
+
+                    return (
+                      <View key={day.date} style={styles.historyDayBlock}>
+                        <Text style={styles.historyDayTitle}>{dateLabel}</Text>
+                        {Array.from(groups.entries()).map(([groupKey, groupRecipes]) => {
+                          const isGoalGroup = groupKey !== "_canonical";
+                          const groupLabel = isGoalGroup
+                            ? groupKey.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+                            : null;
+                          return (
+                            <View key={groupKey}>
+                              {groupLabel && (
+                                <View style={styles.historyGoalGroupRow}>
+                                  <View style={styles.historyGoalGroupDivider} />
+                                  <Text style={styles.historyGoalGroupLabel}>{groupLabel}</Text>
+                                  <View style={styles.historyGoalGroupDivider} />
                                 </View>
                               )}
+                              {groupRecipes.map(renderRecipeRow)}
                             </View>
-                          </View>
-                          <Feather name="chevron-right" size={14} color={Colors.textTertiary} />
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                ));
+                          );
+                        })}
+                      </View>
+                    );
+                  }
+
+                  // Single goal or specific goal tab: flat list
+                  return (
+                    <View key={day.date} style={styles.historyDayBlock}>
+                      <Text style={styles.historyDayTitle}>{dateLabel}</Text>
+                      {day.recipes.map(renderRecipeRow)}
+                    </View>
+                  );
+                });
               })()}
             </View>
 
@@ -947,12 +973,6 @@ const styles = StyleSheet.create({
   historyRecipeMain: {
     flex: 1,
   },
-  historyRecipeMetaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginTop: 2,
-  },
   historyRecipeTitle: {
     fontSize: 13,
     fontFamily: "Inter_600SemiBold",
@@ -963,18 +983,24 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     color: Colors.textSecondary,
   },
-  goalBadge: {
-    backgroundColor: "rgba(34,197,94,0.12)",
-    borderRadius: 999,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderWidth: 1,
-    borderColor: "rgba(34,197,94,0.25)",
+  historyGoalGroupRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 10,
+    marginBottom: 6,
   },
-  goalBadgeText: {
-    fontSize: 9,
-    fontFamily: "Inter_600SemiBold",
+  historyGoalGroupDivider: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  historyGoalGroupLabel: {
+    fontSize: 10,
+    fontFamily: "Inter_700Bold",
     color: Colors.primary,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   infoCard: {
     backgroundColor: Colors.card,
