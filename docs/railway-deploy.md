@@ -37,7 +37,6 @@ Set these in Railway for the API service:
 | `GOOGLE_CLIENT_ID` | Yes | From Google Cloud Console. |
 | `GOOGLE_CLIENT_SECRET` | Yes | From Google Cloud Console. |
 | `PUBLIC_OAUTH_ORIGIN` | Recommended | Your Railway API URL, e.g. `https://<your-service>.railway.app`. |
-| `GOOGLE_IOS_CLIENT_ID` | For mobile OAuth | iOS OAuth client ID (bundle `com.recipegenie.app`). Required if using `mobile-app://` redirect. |
 | `GOOGLE_PLACES_API_KEY` | If using store finder | Required for `/api/shopping-list/stores`. |
 | `AI_INTEGRATIONS_ANTHROPIC_API_KEY` | If using AI recipes | Required for recipe generation. |
 | `ISSUER_URL` or `OIDC_ISSUER_URL` | Optional | Defaults to Google if unset. |
