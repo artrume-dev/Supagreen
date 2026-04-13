@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "NutriSnap",
-    "slug": "mobile-app",
+    "name": "Recipe Genie",
+    "slug": "recipe-genie",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "nutrisnap",
+    "scheme": "recipegenie",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
@@ -17,10 +17,9 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.recipegenie.app",
       "buildNumber": "1",
+      "minimumOsVersion": "16.0",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "NutriSnap uses your location to personalize local seasonal ingredients and nearby store suggestions.",
-        "NSPhotoLibraryUsageDescription": "NutriSnap needs photo library access when you choose to upload recipe or profile images.",
-        "NSCameraUsageDescription": "NutriSnap needs camera access when you choose to capture photos for recipe or profile updates."
+        "NSLocationWhenInUseUsageDescription": "Recipe Genie uses your location to personalise seasonal ingredients and suggest what's available near you."
       }
     },
     "android": {
@@ -36,7 +35,8 @@
     "plugins": [
       "expo-router",
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-apple-authentication"
     ],
     "experiments": {
       "typedRoutes": true,

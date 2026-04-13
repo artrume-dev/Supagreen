@@ -37,7 +37,7 @@ async function randomStringAsync(length: number): Promise<string> {
   return result;
 }
 
-const TOKEN_KEY = "nutrisnap_session_token";
+const TOKEN_KEY = "recipegenie_session_token";
 
 /** Module-level cache so configureFetch getHeaders can read token before React state propagates. */
 let _tokenCache: string | null = null;
@@ -78,6 +78,7 @@ interface AuthState {
   isLoading: boolean;
   isAuthenticated: boolean;
   signIn: () => Promise<void>;
+  signInWithToken: (sid: string) => Promise<boolean>;
   signOut: () => Promise<void>;
 }
 
@@ -87,6 +88,7 @@ const AuthContext = createContext<AuthState>({
   isLoading: true,
   isAuthenticated: false,
   signIn: async () => {},
+  signInWithToken: async () => false,
   signOut: async () => {},
 });
 
@@ -106,7 +108,7 @@ export function useAuthProvider(tokenRef?: TokenRef): AuthState {
   const isExpoGo = Constants.appOwnership === "expo";
   const redirectUri = makeRedirectUri({
     // Expo Go should use exp:// callback. Custom scheme is for standalone/dev-client builds.
-    scheme: isExpoGo ? undefined : "nutrisnap",
+    scheme: isExpoGo ? undefined : "recipegenie",
     path: "auth/callback",
   });
 
@@ -221,6 +223,27 @@ export function useAuthProvider(tokenRef?: TokenRef): AuthState {
     }
   }, [fetchUser, redirectUri, tokenRef]);
 
+  const signInWithToken = useCallback(async (sid: string): Promise<boolean> => {
+    try {
+      await SecureStore.setItemAsync(TOKEN_KEY, sid);
+      setSyncToken(sid);
+      if (tokenRef) tokenRef.current = sid;
+      setToken(sid);
+      const valid = await fetchUser(sid);
+      if (!valid) {
+        setSyncToken(null);
+        if (tokenRef) tokenRef.current = null;
+        await SecureStore.deleteItemAsync(TOKEN_KEY);
+        setToken(null);
+        return false;
+      }
+      return true;
+    } catch (e) {
+      console.error("signInWithToken error:", e);
+      return false;
+    }
+  }, [fetchUser, tokenRef]);
+
   const signOut = useCallback(async () => {
     try {
       if (Platform.OS === "web" && typeof window !== "undefined") {
@@ -255,6 +278,7 @@ export function useAuthProvider(tokenRef?: TokenRef): AuthState {
     isLoading,
     isAuthenticated: Platform.OS === "web" ? !!user : !!token && !!user,
     signIn,
+    signInWithToken,
     signOut,
   };
 }

@@ -1,7 +1,7 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from "expo-secure-store";
 
-export const ONBOARDING_PROGRESS_STORAGE_KEY = "nutrisnap_onboarding_progress";
-const PENDING_ONBOARDING_PROFILE_KEY = "nutrisnap_pending_onboarding_profile";
+export const ONBOARDING_PROGRESS_STORAGE_KEY = "recipegenie_onboarding_progress";
+const PENDING_ONBOARDING_PROFILE_KEY = "recipegenie_pending_onboarding_profile";
 
 export interface PendingOnboardingProfile {
   tempSessionId: string;
@@ -20,11 +20,11 @@ export interface PendingOnboardingProfile {
 export async function savePendingOnboardingProfile(
   payload: PendingOnboardingProfile,
 ): Promise<void> {
-  await AsyncStorage.setItem(PENDING_ONBOARDING_PROFILE_KEY, JSON.stringify(payload));
+  await SecureStore.setItemAsync(PENDING_ONBOARDING_PROFILE_KEY, JSON.stringify(payload));
 }
 
 export async function getPendingOnboardingProfile(): Promise<PendingOnboardingProfile | null> {
-  const raw = await AsyncStorage.getItem(PENDING_ONBOARDING_PROFILE_KEY);
+  const raw = await SecureStore.getItemAsync(PENDING_ONBOARDING_PROFILE_KEY);
   if (!raw) return null;
   try {
     return JSON.parse(raw) as PendingOnboardingProfile;
@@ -34,5 +34,5 @@ export async function getPendingOnboardingProfile(): Promise<PendingOnboardingPr
 }
 
 export async function clearPendingOnboardingProfile(): Promise<void> {
-  await AsyncStorage.removeItem(PENDING_ONBOARDING_PROFILE_KEY);
+  await SecureStore.deleteItemAsync(PENDING_ONBOARDING_PROFILE_KEY);
 }

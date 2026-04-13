@@ -1,10 +1,12 @@
 import { Feather } from "@expo/vector-icons";
+import * as AppleAuthentication from "expo-apple-authentication";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Platform,
   Pressable,
@@ -16,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQueryClient } from "@tanstack/react-query";
 
 import Colors from "@/constants/colors";
+import { getApiBase } from "@/lib/apiBase";
 import { getStoredToken, getSyncToken, useAuth } from "@/lib/auth";
 import {
   getGetProfileQueryKey,
@@ -40,7 +43,7 @@ const STATS = [
 
 export default function SignInScreen() {
   const insets = useSafeAreaInsets();
-  const { signIn, token, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { signIn, signInWithToken, token, isAuthenticated, isLoading: authLoading } = useAuth();
   const params = useLocalSearchParams<{ postOnboarding?: string }>();
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
@@ -196,6 +199,60 @@ export default function SignInScreen() {
     }
   };
 
+  const handleAppleSignIn = async () => {
+    setLoading(true);
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+
+      if (!credential.identityToken) {
+        Alert.alert("Sign In Failed", "No identity token returned from Apple.");
+        return;
+      }
+
+      const apiBase = getApiBase();
+      const appleRes = await fetch(`${apiBase}/api/mobile-auth/apple`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          identityToken: credential.identityToken,
+          firstName: credential.fullName?.givenName ?? null,
+          lastName: credential.fullName?.familyName ?? null,
+        }),
+      });
+
+      if (!appleRes.ok) {
+        const body = await appleRes.json().catch(() => ({ error: "Unknown error" })) as { error?: string };
+        Alert.alert("Sign In Failed", body.error ?? "Apple sign-in failed.");
+        return;
+      }
+
+      const { token: sid } = await appleRes.json() as { token: string };
+      if (!sid) {
+        Alert.alert("Sign In Failed", "Session could not be created.");
+        return;
+      }
+
+      const ok = await signInWithToken(sid);
+      if (!ok) {
+        Alert.alert("Sign In Failed", "Could not restore session. Please try again.");
+        return;
+      }
+      // Auth state is now set — AuthGate will redirect based on profile completeness
+    } catch (err: unknown) {
+      const code = (err as { code?: string }).code;
+      if (code === "ERR_REQUEST_CANCELED") return;
+      console.error("Apple sign-in error:", err);
+      Alert.alert("Sign In Failed", "An error occurred during Apple sign-in.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const completedSteps = Object.values(mealReady).filter(Boolean).length;
   const progressPct = `${Math.max((completedSteps / 4) * 100, fromOnboarding ? 12 : 0)}%`;
   const showGenerationState = fromOnboarding || isFinalizing;
@@ -216,9 +273,9 @@ export default function SignInScreen() {
       <View style={[styles.content, { paddingTop: topPad }]}>
         <View style={styles.logoRow}>
           <View style={styles.logoBadge}>
-            <Text style={styles.logoLetter}>N</Text>
+            <Text style={styles.logoLetter}>R</Text>
           </View>
-          <Text style={styles.logoText}>NutriSnap</Text>
+          <Text style={styles.logoText}>Recipe Genie</Text>
         </View>
 
         <View style={styles.heroSection}>
@@ -231,9 +288,9 @@ export default function SignInScreen() {
           <Text style={styles.heroTitleGreen}>every day.</Text>
 
           <Text style={styles.heroDescription}>
-            Your AI nutritionist generates 3 personalised whole-food recipes
-            every morning — tailored to your goals and what's in season near
-            you.
+            Your smart recipe planner generates personalised whole-food meals
+            every day — tailored to your goals and what's in season near you.
+            Not a substitute for professional dietary advice.
           </Text>
         </View>
 
@@ -311,14 +368,24 @@ export default function SignInScreen() {
           </LinearGradient>
         </Pressable>
 
+        {Platform.OS === "ios" ? (
+          <AppleAuthentication.AppleAuthenticationButton
+            buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+            buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE_OUTLINE}
+            cornerRadius={14}
+            style={styles.appleNativeButton}
+            onPress={handleAppleSignIn}
+          />
+        ) : null}
+
         <View style={styles.termsContainer}>
           <Text style={styles.terms}>By continuing, you agree to our</Text>
           <View style={{ flexDirection: "row", gap: 4 }}>
-            <Pressable onPress={() => WebBrowser.openBrowserAsync("https://nutrisnap.app/terms")}>
+            <Pressable onPress={() => WebBrowser.openBrowserAsync("https://recipegenie.app/terms")}>
               <Text style={{ color: "rgba(255,255,255,0.45)", textDecorationLine: "underline", fontSize: 12, fontFamily: "Inter_400Regular" }}>Terms of Service</Text>
             </Pressable>
             <Text style={{ color: "rgba(255,255,255,0.45)", fontSize: 12, fontFamily: "Inter_400Regular" }}>&</Text>
-            <Pressable onPress={() => WebBrowser.openBrowserAsync("https://nutrisnap.app/privacy")}>
+            <Pressable onPress={() => WebBrowser.openBrowserAsync("https://recipegenie.app/privacy")}>
               <Text style={{ color: "rgba(255,255,255,0.45)", textDecorationLine: "underline", fontSize: 12, fontFamily: "Inter_400Regular" }}>Privacy Policy</Text>
             </Pressable>
           </View>
@@ -537,23 +604,10 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
     color: "#fff",
   },
-  appleButton: {
+  appleNativeButton: {
     marginTop: 10,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.22)",
-    backgroundColor: "rgba(255,255,255,0.08)",
-    paddingVertical: 15,
-    paddingHorizontal: 18,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 8,
-  },
-  appleText: {
-    fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
-    color: Colors.text,
+    height: 52,
+    width: "100%",
   },
   termsContainer: {
     alignItems: "center",

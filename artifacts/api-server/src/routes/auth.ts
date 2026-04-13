@@ -1,4 +1,5 @@
 import * as oidc from "openid-client";
+import crypto from "crypto";
 import { Router, type IRouter, type Request, type Response } from "express";
 import {
   GetCurrentUserResponse,
@@ -7,6 +8,7 @@ import {
   LogoutMobileSessionResponse,
 } from "@workspace/api-zod";
 import { db, usersTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import {
   clearSession,
   getOidcConfig,
@@ -152,6 +154,7 @@ function getSafeReturnTo(value: unknown, appOrigin: string): string {
   // Allow trusted custom-scheme deep links for native mobile auth handoff.
   if (
     value.startsWith("mobile-app://") ||
+    value.startsWith("recipegenie://") ||
     value.startsWith("exp://") ||
     value.startsWith("exps://")
   ) {
@@ -327,6 +330,7 @@ router.get("/callback", async (req: Request, res: Response) => {
 
   if (
     returnTo.startsWith("mobile-app://") ||
+    returnTo.startsWith("recipegenie://") ||
     returnTo.startsWith("exp://") ||
     returnTo.startsWith("exps://")
   ) {
@@ -463,6 +467,110 @@ router.post("/mobile-auth/logout", async (req: Request, res: Response) => {
     await deleteSession(sid);
   }
   res.json(LogoutMobileSessionResponse.parse({ success: true }));
+});
+
+const APPLE_JWKS_URL = "https://appleid.apple.com/auth/keys";
+const APPLE_ISSUER = "https://appleid.apple.com";
+
+interface AppleJwk {
+  kid: string;
+  kty: string;
+  n: string;
+  e: string;
+  alg: string;
+  use: string;
+}
+
+function b64urlDecode(s: string): Buffer {
+  const padded = s.replace(/-/g, "+").replace(/_/g, "/") + "==".slice(0, (4 - (s.length % 4)) % 4);
+  return Buffer.from(padded, "base64");
+}
+
+async function verifyAppleIdentityToken(
+  identityToken: string,
+): Promise<{ sub: string; email?: string }> {
+  const parts = identityToken.split(".");
+  if (parts.length !== 3) throw new Error("Malformed JWT");
+  const [headerB64, payloadB64, sigB64] = parts as [string, string, string];
+
+  const header = JSON.parse(b64urlDecode(headerB64).toString("utf-8")) as { kid: string; alg: string };
+  const payload = JSON.parse(b64urlDecode(payloadB64).toString("utf-8")) as {
+    iss: string;
+    aud: string | string[];
+    sub: string;
+    email?: string;
+    exp: number;
+  };
+
+  // Validate claims before signature (fast path)
+  if (payload.iss !== APPLE_ISSUER) throw new Error("Invalid issuer");
+  const expectedAud = process.env.APPLE_BUNDLE_ID ?? "com.recipegenie.app";
+  const aud = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
+  if (!aud.includes(expectedAud)) throw new Error("Invalid audience");
+  if (payload.exp < Math.floor(Date.now() / 1000)) throw new Error("Token expired");
+
+  // Fetch Apple's public keys and find the matching key
+  const jwksRes = await fetch(APPLE_JWKS_URL);
+  if (!jwksRes.ok) throw new Error("Failed to fetch Apple JWKS");
+  const jwks = (await jwksRes.json()) as { keys: AppleJwk[] };
+  const jwk = jwks.keys.find((k) => k.kid === header.kid);
+  if (!jwk) throw new Error("No matching Apple public key found");
+
+  // Import the JWK and verify signature (Node 15+ built-in crypto)
+  const publicKey = crypto.createPublicKey({ key: jwk, format: "jwk" } as Parameters<typeof crypto.createPublicKey>[0]);
+  const signData = Buffer.from(`${headerB64}.${payloadB64}`);
+  const signature = b64urlDecode(sigB64);
+  const valid = crypto.verify("RSA-SHA256", signData, publicKey, signature);
+  if (!valid) throw new Error("Invalid token signature");
+
+  return { sub: payload.sub, email: payload.email };
+}
+
+router.post("/mobile-auth/apple", async (req: Request, res: Response) => {
+  const { identityToken, firstName, lastName } = req.body as {
+    identityToken?: string;
+    firstName?: string | null;
+    lastName?: string | null;
+  };
+
+  if (!identityToken || typeof identityToken !== "string") {
+    res.status(400).json({ error: "identityToken is required" });
+    return;
+  }
+
+  try {
+    const claims = await verifyAppleIdentityToken(identityToken);
+
+    const appleId = `apple:${claims.sub}`;
+    // Apple only sends name/email on first sign-in — do not overwrite existing values with null
+    const [existing] = await db.select().from(usersTable).where(eq(usersTable.id, appleId));
+    const dbUser = await upsertUser({
+      sub: appleId,
+      email: claims.email ?? existing?.email ?? null,
+      first_name: firstName ?? existing?.firstName ?? null,
+      last_name: lastName ?? existing?.lastName ?? null,
+      profile_image_url: null,
+    });
+
+    const now = Math.floor(Date.now() / 1000);
+    const sessionData: SessionData = {
+      user: {
+        id: dbUser.id,
+        email: dbUser.email,
+        firstName: dbUser.firstName,
+        lastName: dbUser.lastName,
+        profileImageUrl: dbUser.profileImageUrl,
+      },
+      access_token: `apple:${claims.sub}`,
+      expires_at: now + SESSION_TTL / 1000,
+    };
+
+    const sid = await createSession(sessionData);
+    res.json({ token: sid });
+  } catch (err) {
+    console.error("Apple Sign In error:", err);
+    res.status(401).json({ error: "Apple sign-in failed. Please try again." });
+  }
 });
 
 export default router;
