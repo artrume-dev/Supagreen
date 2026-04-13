@@ -682,9 +682,15 @@ export default function OnboardingScreen() {
             />
           </View>
         </View>
-        <Text style={styles.stepCount}>
-          {step + 1}/{STEPS.length}
-        </Text>
+        {isEditMode ? (
+          <Pressable onPress={() => router.back()} style={styles.cancelBtn}>
+            <Feather name="x" size={20} color={Colors.textSecondary} />
+          </Pressable>
+        ) : (
+          <Text style={styles.stepCount}>
+            {step + 1}/{STEPS.length}
+          </Text>
+        )}
       </View>
 
       <ScrollView
@@ -749,6 +755,14 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: Colors.card,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  cancelBtn: {
     width: 40,
     height: 40,
     borderRadius: 12,

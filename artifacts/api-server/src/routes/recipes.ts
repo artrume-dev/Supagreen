@@ -786,7 +786,6 @@ router.get("/recipes/history", async (req: Request, res: Response) => {
       and(
         eq(dailyRecipesTable.userId, userId),
         sql`${dailyRecipesTable.date} >= ${startDateStr}`,
-        inArray(dailyRecipesTable.mealType, CANONICAL_MEALS as unknown as string[]),
       ),
     )
     .orderBy(desc(dailyRecipesTable.date), desc(dailyRecipesTable.generatedAt));

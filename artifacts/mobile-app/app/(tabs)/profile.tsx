@@ -130,6 +130,7 @@ export default function ProfileScreen() {
 
   const [activeTab, setActiveTab] = useState<"stats" | "saved">("stats");
   const [historyDaysFilter, setHistoryDaysFilter] = useState<7 | 30 | 90>(30);
+  const [historyGoalFilter, setHistoryGoalFilter] = useState<string>("all");
 
   const { data: profileResponse } = useQuery({
     ...getGetProfileQueryOptions(),
@@ -177,13 +178,12 @@ export default function ProfileScreen() {
       ? `${user.firstName} ${user.lastName}`
       : user?.firstName || "User";
 
-  const goalLabel = profileData?.healthGoal
-    ? profileData.healthGoal
-        .split(",")
-        .map((goal) => goal.trim())
-        .filter(Boolean)
-        .map((goal) => goal.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()))
-        .join(", ")
+  const userGoals = profileData?.healthGoal
+    ? profileData.healthGoal.split(",").map((g) => g.trim()).filter(Boolean)
+    : [];
+
+  const goalLabel = userGoals.length > 0
+    ? userGoals.map((g) => g.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())).join(", ")
     : "Not set";
 
   const dietLabel = profileData?.dietType
@@ -423,11 +423,13 @@ export default function ProfileScreen() {
                   {mealHistoryData?.totalMeals ?? 0} meals
                 </Text>
               </View>
+
+              {/* Day range filters */}
               <View style={styles.historyFilters}>
-                {[7, 30, 90].map((days) => (
+                {([7, 30, 90] as const).map((days) => (
                   <Pressable
                     key={days}
-                    onPress={() => setHistoryDaysFilter(days as 7 | 30 | 90)}
+                    onPress={() => setHistoryDaysFilter(days)}
                     style={[
                       styles.historyFilter,
                       historyDaysFilter === days && styles.historyFilterActive,
@@ -444,10 +446,60 @@ export default function ProfileScreen() {
                   </Pressable>
                 ))}
               </View>
+
+              {/* Goal tabs — only shown when user has multiple goals */}
+              {userGoals.length > 1 && (
+                <View style={styles.historyGoalTabs}>
+                  <Pressable
+                    onPress={() => setHistoryGoalFilter("all")}
+                    style={[
+                      styles.historyGoalTab,
+                      historyGoalFilter === "all" && styles.historyGoalTabActive,
+                    ]}
+                  >
+                    <Text style={[styles.historyGoalTabText, historyGoalFilter === "all" && styles.historyGoalTabTextActive]}>
+                      All
+                    </Text>
+                  </Pressable>
+                  {userGoals.map((g) => {
+                    const label = g.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+                    return (
+                      <Pressable
+                        key={g}
+                        onPress={() => setHistoryGoalFilter(g)}
+                        style={[
+                          styles.historyGoalTab,
+                          historyGoalFilter === g && styles.historyGoalTabActive,
+                        ]}
+                      >
+                        <Text style={[styles.historyGoalTabText, historyGoalFilter === g && styles.historyGoalTabTextActive]}>
+                          {label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
+
               {mealHistoryLoading ? (
                 <Text style={styles.historyLoadingText}>Loading meals...</Text>
-              ) : mealHistoryData?.days?.length ? (
-                mealHistoryData.days.slice(0, 3).map((day) => (
+              ) : (() => {
+                const allDays = mealHistoryData?.days ?? [];
+                const filteredDays = historyGoalFilter === "all"
+                  ? allDays
+                  : allDays.map((day) => ({
+                      ...day,
+                      recipes: day.recipes.filter((r) => {
+                        const json = r.recipe as Record<string, unknown>;
+                        return json.__goalKey === historyGoalFilter;
+                      }),
+                    })).filter((day) => day.recipes.length > 0);
+
+                if (filteredDays.length === 0) {
+                  return <Text style={styles.historyLoadingText}>No meal history yet.</Text>;
+                }
+
+                return filteredDays.slice(0, 3).map((day) => (
                   <View key={day.date} style={styles.historyDayBlock}>
                     <Text style={styles.historyDayTitle}>
                       {new Date(`${day.date}T00:00:00`).toLocaleDateString("en-US", {
@@ -456,30 +508,49 @@ export default function ProfileScreen() {
                         day: "numeric",
                       })}
                     </Text>
-                    {day.recipes.slice(0, 3).map((item) => (
-                      <Pressable
-                        key={item.id}
-                        onPress={() =>
-                          router.push({
-                            pathname: "/recipe/[id]",
-                            params: { id: String(item.id) },
-                          })
-                        }
-                        style={styles.historyRecipeRow}
-                      >
-                        <Text style={styles.historyRecipeTitle} numberOfLines={1}>
-                          {item.recipe.emoji ?? "🍽"} {item.recipe.title ?? "Untitled recipe"}
-                        </Text>
-                        <Text style={styles.historyRecipeMeta}>
-                          {item.mealType} · {item.recipe.prepTime ?? 0} min
-                        </Text>
-                      </Pressable>
-                    ))}
+                    {day.recipes.slice(0, 4).map((item) => {
+                      const json = item.recipe as Record<string, unknown>;
+                      const goalKey = typeof json.__goalKey === "string" ? json.__goalKey : null;
+                      const displayMeal = typeof json.__baseMealType === "string"
+                        ? json.__baseMealType
+                        : item.mealType;
+                      const goalBadgeLabel = goalKey
+                        ? goalKey.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+                        : null;
+
+                      return (
+                        <Pressable
+                          key={item.id}
+                          onPress={() =>
+                            router.push({
+                              pathname: "/recipe/[id]",
+                              params: { id: String(item.id) },
+                            })
+                          }
+                          style={styles.historyRecipeRow}
+                        >
+                          <View style={styles.historyRecipeMain}>
+                            <Text style={styles.historyRecipeTitle} numberOfLines={1}>
+                              {item.recipe.emoji ?? "🍽"} {item.recipe.title ?? "Untitled recipe"}
+                            </Text>
+                            <View style={styles.historyRecipeMetaRow}>
+                              <Text style={styles.historyRecipeMeta}>
+                                {displayMeal} · {item.recipe.prepTime ?? 0} min
+                              </Text>
+                              {goalBadgeLabel && historyGoalFilter === "all" && userGoals.length > 1 && (
+                                <View style={styles.goalBadge}>
+                                  <Text style={styles.goalBadgeText}>{goalBadgeLabel}</Text>
+                                </View>
+                              )}
+                            </View>
+                          </View>
+                          <Feather name="chevron-right" size={14} color={Colors.textTertiary} />
+                        </Pressable>
+                      );
+                    })}
                   </View>
-                ))
-              ) : (
-                <Text style={styles.historyLoadingText}>No meal history yet.</Text>
-              )}
+                ));
+              })()}
             </View>
 
             <View style={styles.infoCard}>
@@ -840,11 +911,47 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.3,
   },
+  historyGoalTabs: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  historyGoalTab: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+  historyGoalTabActive: {
+    backgroundColor: "rgba(34,197,94,0.15)",
+    borderColor: "rgba(34,197,94,0.4)",
+  },
+  historyGoalTabText: {
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.textSecondary,
+  },
+  historyGoalTabTextActive: {
+    color: Colors.primary,
+  },
   historyRecipeRow: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: "rgba(255,255,255,0.04)",
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 8,
+  },
+  historyRecipeMain: {
+    flex: 1,
+  },
+  historyRecipeMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 2,
   },
   historyRecipeTitle: {
     fontSize: 13,
@@ -855,7 +962,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: "Inter_400Regular",
     color: Colors.textSecondary,
-    marginTop: 2,
+  },
+  goalBadge: {
+    backgroundColor: "rgba(34,197,94,0.12)",
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: "rgba(34,197,94,0.25)",
+  },
+  goalBadgeText: {
+    fontSize: 9,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.primary,
   },
   infoCard: {
     backgroundColor: Colors.card,
