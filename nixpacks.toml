@@ -1,15 +1,13 @@
 [phases.setup]
-nixPkgs = ["nodejs_20"]
+nixPkgs = ["nodejs_20", "nodePackages.pnpm"]
 
 [phases.install]
 cmds = [
-  "npm install --prefix /usr/local pnpm@10.32.1",
-  "export PATH=\"/usr/local/bin:$PATH\"",
-  "npx pnpm install --frozen-lockfile --ignore-scripts"
+  "pnpm install --frozen-lockfile --ignore-scripts"
 ]
 
 [phases.build]
-cmds = ["npx pnpm --filter @workspace/api-server build"]
+cmds = ["pnpm --filter @workspace/api-server build"]
 
 [start]
-cmd = "npx pnpm --filter @workspace/api-server start"
+cmd = "pnpm --filter @workspace/api-server start"
