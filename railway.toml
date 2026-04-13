@@ -3,6 +3,6 @@ builder = "nixpacks"
 buildCommand = "pnpm --filter @workspace/api-server build"
 
 [deploy]
-startCommand = "pnpm --filter @workspace/api-server start"
+startCommand = "pnpm --filter @workspace/db push-force && pnpm --filter @workspace/api-server start"
 healthcheckPath = "/api/healthz"
 healthcheckTimeout = 60
