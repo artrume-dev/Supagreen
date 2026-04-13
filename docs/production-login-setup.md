@@ -36,6 +36,7 @@ Deploy the API server to a host that supports Node.js and PostgreSQL:
 | `GOOGLE_CLIENT_SECRET` | Yes | From Google Cloud Console |
 | `ISSUER_URL` or `OIDC_ISSUER_URL` | Optional | Default: `https://accounts.google.com` |
 | `PUBLIC_OAUTH_ORIGIN` | If behind proxy | Your API base URL, e.g. `https://api.yourdomain.com` |
+| `GOOGLE_IOS_CLIENT_ID` | If using mobile OAuth | iOS OAuth client ID (bundle `com.recipegenie.app`). Required for `mobile-app://` redirect. |
 
 ### B. Configure Google OAuth (Google Cloud Console)
 

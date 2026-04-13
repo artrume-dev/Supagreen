@@ -23,6 +23,7 @@ export interface SessionData {
 }
 
 let oidcConfig: client.Configuration | null = null;
+let mobileOidcConfig: client.Configuration | null = null;
 
 export function getOidcClientId(): string {
   const clientId =
@@ -31,6 +32,20 @@ export function getOidcClientId(): string {
   if (!clientId || !clientId.trim()) {
     throw new Error(
       "Missing OIDC client id. Set GOOGLE_CLIENT_ID or OIDC_CLIENT_ID before using /api/login.",
+    );
+  }
+  return clientId;
+}
+
+export function getMobileOidcClientId(): string {
+  const clientId =
+    process.env.GOOGLE_IOS_CLIENT_ID ??
+    process.env.OIDC_MOBILE_CLIENT_ID ??
+    process.env.GOOGLE_CLIENT_ID ??
+    process.env.OIDC_CLIENT_ID;
+  if (!clientId || !clientId.trim()) {
+    throw new Error(
+      "Missing mobile OIDC client id. Set GOOGLE_IOS_CLIENT_ID or OIDC_MOBILE_CLIENT_ID for mobile sign-in.",
     );
   }
   return clientId;
@@ -46,6 +61,20 @@ export async function getOidcConfig(): Promise<client.Configuration> {
     );
   }
   return oidcConfig;
+}
+
+export async function getMobileOidcConfig(): Promise<client.Configuration> {
+  if (!mobileOidcConfig) {
+    const clientSecret =
+      process.env.GOOGLE_IOS_CLIENT_SECRET?.trim() ??
+      process.env.OIDC_MOBILE_CLIENT_SECRET?.trim();
+    mobileOidcConfig = await client.discovery(
+      new URL(ISSUER_URL),
+      getMobileOidcClientId(),
+      clientSecret ? clientSecret : undefined,
+    );
+  }
+  return mobileOidcConfig;
 }
 
 export async function createSession(data: SessionData): Promise<string> {

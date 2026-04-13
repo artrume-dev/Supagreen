@@ -17,6 +17,8 @@ import {
   SESSION_TTL,
   ISSUER_URL,
   getOidcClientId,
+  getMobileOidcClientId,
+  getMobileOidcConfig,
   type SessionData,
 } from "../lib/auth";
 
@@ -375,7 +377,7 @@ router.post(
     const { code, code_verifier, redirect_uri, state, nonce } = parsed.data;
 
     try {
-      const config = await getOidcConfig();
+      const config = await getMobileOidcConfig();
 
       const callbackUrl = new URL(redirect_uri);
       callbackUrl.searchParams.set("code", code);
@@ -425,7 +427,7 @@ router.post(
 let cachedDiscovery: { authorization_endpoint: string } | null = null;
 
 router.get("/mobile-auth/config", async (_req: Request, res: Response) => {
-  const clientId = getOidcClientId();
+  const clientId = getMobileOidcClientId();
   const isGoogleIssuer = ISSUER_URL.includes("accounts.google.com");
   const scope = isGoogleIssuer
     ? "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile"

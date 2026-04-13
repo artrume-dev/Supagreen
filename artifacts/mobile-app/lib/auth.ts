@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from "expo-secure-store";
 import { makeRedirectUri } from "expo-auth-session";
 import Constants from "expo-constants";
 import * as Crypto from "expo-crypto";
@@ -52,7 +52,7 @@ export function setCachedToken(token: string | null): void {
 
 /** Returns the stored session token (for post-login flows where React state may lag). */
 export async function getStoredToken(): Promise<string | null> {
-  return AsyncStorage.getItem(TOKEN_KEY);
+  return await SecureStore.getItemAsync(TOKEN_KEY);
 }
 
 /** Sync token cache for getHeaders before React state propagates. */
@@ -106,7 +106,7 @@ export function useAuthProvider(tokenRef?: TokenRef): AuthState {
   const isExpoGo = Constants.appOwnership === "expo";
   const redirectUri = makeRedirectUri({
     // Expo Go should use exp:// callback. Custom scheme is for standalone/dev-client builds.
-    scheme: isExpoGo ? undefined : "mobile-app",
+    scheme: isExpoGo ? undefined : "nutrisnap",
     path: "auth/callback",
   });
 
@@ -142,14 +142,14 @@ export function useAuthProvider(tokenRef?: TokenRef): AuthState {
   useEffect(() => {
     (async () => {
       try {
-        const stored = await AsyncStorage.getItem(TOKEN_KEY);
+        const stored = await SecureStore.getItemAsync(TOKEN_KEY);
         if (stored) {
           const valid = await fetchUser(stored);
           if (valid) {
             setSyncToken(stored);
             setToken(stored);
           } else {
-            await AsyncStorage.removeItem(TOKEN_KEY);
+            await SecureStore.deleteItemAsync(TOKEN_KEY);
           }
         } else if (Platform.OS === "web") {
           // Web relies on cookie-backed session from /api/login.
@@ -178,88 +178,32 @@ export function useAuthProvider(tokenRef?: TokenRef): AuthState {
         return;
       }
 
-      // App-centric OAuth: open Google directly with app redirect, then exchange code server-side.
-      // No ngrok needed: server only handles POST token-exchange over local network or production URL.
-      const configRes = await fetch(`${apiBase}/api/mobile-auth/config`);
-      if (!configRes.ok) {
-        Alert.alert("Login Error", "Could not load auth configuration.");
-        return;
-      }
-      const config = (await configRes.json()) as {
-        clientId: string;
-        authorizationEndpoint: string;
-        scope: string;
-      };
-      const { codeVerifier, codeChallenge } = await generatePkce();
-      const state = await randomStringAsync(32);
-      const nonce = await randomStringAsync(32);
-
-      const authUrl = new URL(config.authorizationEndpoint);
-      authUrl.searchParams.set("client_id", config.clientId);
-      authUrl.searchParams.set("redirect_uri", redirectUri);
-      authUrl.searchParams.set("response_type", "code");
-      authUrl.searchParams.set("scope", config.scope);
-      authUrl.searchParams.set("state", state);
-      authUrl.searchParams.set("nonce", nonce);
-      authUrl.searchParams.set("code_challenge", codeChallenge);
-      authUrl.searchParams.set("code_challenge_method", "S256");
-      authUrl.searchParams.set("prompt", "login consent");
-      if (config.scope.includes("googleapis.com")) {
-        authUrl.searchParams.set("access_type", "offline");
-        // Google requires device_id/device_name when redirect_uri uses a private IP (e.g. Expo Go).
-        try {
-          const redirectHost = new URL(redirectUri).hostname;
-          if (
-            redirectHost === "localhost" ||
-            redirectHost === "127.0.0.1" ||
-            /^192\.168\.\d+\.\d+$/.test(redirectHost) ||
-            /^10\.\d+\.\d+\.\d+$/.test(redirectHost)
-          ) {
-            authUrl.searchParams.set("device_id", state);
-            authUrl.searchParams.set("device_name", "NutriSnap Dev");
-          }
-        } catch {
-          // Ignore URL parse errors
-        }
-      }
-
-      const result = await WebBrowser.openAuthSessionAsync(authUrl.toString(), redirectUri);
+      // Native/dev-client flow: delegate OAuth redirect handling to API callback,
+      // then deep-link back with sid query parameter.
+      const loginUrl = `${apiBase}/api/login?returnTo=${encodeURIComponent(redirectUri)}`;
+      const result = await WebBrowser.openAuthSessionAsync(loginUrl, redirectUri);
 
       if (result.type !== "success" || !result.url) {
         return;
       }
 
       const callbackUrl = new URL(result.url);
-      const code = callbackUrl.searchParams.get("code");
-      const returnedState = callbackUrl.searchParams.get("state");
-
-      if (!code || returnedState !== state) {
-        Alert.alert("Login Failed", "Invalid response from sign-in. Please try again.");
-        return;
-      }
-
-      const exchangeRes = await fetch(`${apiBase}/api/mobile-auth/token-exchange`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          code,
-          code_verifier: codeVerifier,
-          redirect_uri: redirectUri,
-          state,
-          nonce,
-        }),
-      });
-
-      if (!exchangeRes.ok) {
-        const errBody = await exchangeRes.text();
-        console.error("Token exchange failed:", exchangeRes.status, errBody);
+      const sid = callbackUrl.searchParams.get("sid");
+      if (!sid) {
+        const authError = callbackUrl.searchParams.get("error");
+        const authErrorDescription = callbackUrl.searchParams.get("error_description");
+        if (authError || authErrorDescription) {
+          Alert.alert(
+            "Login Failed",
+            authErrorDescription || authError || "Could not complete sign-in.",
+          );
+          return;
+        }
         Alert.alert("Login Failed", "Could not complete sign-in. Please try again.");
         return;
       }
 
-      const { token: sid } = (await exchangeRes.json()) as { token: string };
-
-      await AsyncStorage.setItem(TOKEN_KEY, sid);
+      await SecureStore.setItemAsync(TOKEN_KEY, sid);
       setSyncToken(sid);
       if (tokenRef) tokenRef.current = sid;
       setToken(sid);
@@ -267,7 +211,7 @@ export function useAuthProvider(tokenRef?: TokenRef): AuthState {
       if (!valid) {
         setSyncToken(null);
         if (tokenRef) tokenRef.current = null;
-        await AsyncStorage.removeItem(TOKEN_KEY);
+        await SecureStore.deleteItemAsync(TOKEN_KEY);
         setToken(null);
         Alert.alert("Login Failed", "Session could not be restored. Please try again.");
       }
@@ -283,7 +227,7 @@ export function useAuthProvider(tokenRef?: TokenRef): AuthState {
         const returnTo = `${window.location.origin}/sign-in`;
         const logoutUrl = `${getApiBase()}/api/auth/logout?returnTo=${encodeURIComponent(returnTo)}`;
         // Clear local auth state first so logout always works client-side.
-        await AsyncStorage.removeItem(TOKEN_KEY);
+        await SecureStore.deleteItemAsync(TOKEN_KEY);
         setToken(null);
         setUser(null);
         window.location.href = logoutUrl;
@@ -299,7 +243,7 @@ export function useAuthProvider(tokenRef?: TokenRef): AuthState {
     } catch (e) {
       console.error("Logout error:", e);
     }
-    await AsyncStorage.removeItem(TOKEN_KEY);
+    await SecureStore.deleteItemAsync(TOKEN_KEY);
     setSyncToken(null);
     setToken(null);
     setUser(null);

@@ -1,10 +1,10 @@
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Platform,
   Pressable,
@@ -33,9 +33,9 @@ const HERO_IMAGE =
   "https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=800&q=80";
 
 const STATS = [
-  { value: "50k+", label: "Users" },
-  { value: "4.9★", label: "Rating" },
-  { value: "2.1M", label: "Recipes" },
+  { value: "AI", label: "Powered" },
+  { value: "Daily", label: "Recipes" },
+  { value: "100%", label: "Whole Food" },
 ];
 
 export default function SignInScreen() {
@@ -196,13 +196,6 @@ export default function SignInScreen() {
     }
   };
 
-  const handleAppleSignIn = () => {
-    Alert.alert(
-      "Apple Sign-In coming soon",
-      "Google sign-in is available now. Apple sign-in UI is restored and backend support will be connected next.",
-    );
-  };
-
   const completedSteps = Object.values(mealReady).filter(Boolean).length;
   const progressPct = `${Math.max((completedSteps / 4) * 100, fromOnboarding ? 12 : 0)}%`;
   const showGenerationState = fromOnboarding || isFinalizing;
@@ -318,19 +311,18 @@ export default function SignInScreen() {
           </LinearGradient>
         </Pressable>
 
-        {Platform.OS === "ios" ? (
-          <Pressable
-            onPress={handleAppleSignIn}
-            style={({ pressed }) => [styles.appleButton, pressed && { opacity: 0.9 }]}
-          >
-            <Feather name="smartphone" size={18} color={Colors.text} />
-            <Text style={styles.appleText}>Continue with Apple</Text>
-          </Pressable>
-        ) : null}
-
-        <Text style={styles.terms}>
-          By continuing, you agree to our Terms & Privacy Policy
-        </Text>
+        <View style={styles.termsContainer}>
+          <Text style={styles.terms}>By continuing, you agree to our</Text>
+          <View style={{ flexDirection: "row", gap: 4 }}>
+            <Pressable onPress={() => WebBrowser.openBrowserAsync("https://nutrisnap.app/terms")}>
+              <Text style={{ color: "rgba(255,255,255,0.45)", textDecorationLine: "underline", fontSize: 12, fontFamily: "Inter_400Regular" }}>Terms of Service</Text>
+            </Pressable>
+            <Text style={{ color: "rgba(255,255,255,0.45)", fontSize: 12, fontFamily: "Inter_400Regular" }}>&</Text>
+            <Pressable onPress={() => WebBrowser.openBrowserAsync("https://nutrisnap.app/privacy")}>
+              <Text style={{ color: "rgba(255,255,255,0.45)", textDecorationLine: "underline", fontSize: 12, fontFamily: "Inter_400Regular" }}>Privacy Policy</Text>
+            </Pressable>
+          </View>
+        </View>
       </View>
     </View>
   );
@@ -563,11 +555,15 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
     color: Colors.text,
   },
+  termsContainer: {
+    alignItems: "center",
+    marginTop: 16,
+    gap: 4,
+  },
   terms: {
     fontSize: 12,
     fontFamily: "Inter_400Regular",
     color: "rgba(255,255,255,0.20)",
     textAlign: "center",
-    marginTop: 16,
   },
 });
