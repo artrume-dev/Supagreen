@@ -8,7 +8,7 @@ import {
   LogoutMobileSessionResponse,
 } from "@workspace/api-zod";
 import { db, usersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
   clearSession,
   getOidcConfig,
@@ -185,28 +185,42 @@ function getSafeReturnTo(value: unknown, appOrigin: string): string {
 }
 
 async function upsertUser(claims: Record<string, unknown>) {
-  const userData = {
-    id: claims.sub as string,
-    email: (claims.email as string) || null,
-    firstName: (claims.first_name as string) || null,
-    lastName: (claims.last_name as string) || null,
-    profileImageUrl: (claims.profile_image_url || claims.picture) as
-      | string
-      | null,
+  const id = claims.sub as string;
+  const email = (claims.email as string) || null;
+  const firstName = (claims.first_name as string) || null;
+  const lastName = (claims.last_name as string) || null;
+  const profileImageUrl = ((claims.profile_image_url || claims.picture) as string | null) || null;
+
+  // Use raw SQL so we only touch the five core columns.
+  // Drizzle v0.45 enumerates ALL schema columns in INSERT/RETURNING (including
+  // billing columns), which breaks sign-in if push-force hasn't run yet.
+  const result = await db.execute(sql`
+    INSERT INTO users (id, email, first_name, last_name, profile_image_url)
+    VALUES (${id}, ${email}, ${firstName}, ${lastName}, ${profileImageUrl})
+    ON CONFLICT (id) DO UPDATE SET
+      email            = EXCLUDED.email,
+      first_name       = EXCLUDED.first_name,
+      last_name        = EXCLUDED.last_name,
+      profile_image_url = EXCLUDED.profile_image_url,
+      updated_at       = NOW()
+    RETURNING id, email, first_name, last_name, profile_image_url
+  `);
+
+  const row = result.rows[0] as {
+    id: string;
+    email: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    profile_image_url: string | null;
   };
 
-  const [user] = await db
-    .insert(usersTable)
-    .values(userData)
-    .onConflictDoUpdate({
-      target: usersTable.id,
-      set: {
-        ...userData,
-        updatedAt: new Date(),
-      },
-    })
-    .returning();
-  return user;
+  return {
+    id: row.id,
+    email: row.email,
+    firstName: row.first_name,
+    lastName: row.last_name,
+    profileImageUrl: row.profile_image_url,
+  };
 }
 
 router.get("/me", (req: Request, res: Response) => {
@@ -555,8 +569,19 @@ router.post("/mobile-auth/apple", async (req: Request, res: Response) => {
     const claims = await verifyAppleIdentityToken(identityToken);
 
     const appleId = `apple:${claims.sub}`;
-    // Apple only sends name/email on first sign-in — do not overwrite existing values with null
-    const [existing] = await db.select().from(usersTable).where(eq(usersTable.id, appleId));
+    // Apple only sends name/email on first sign-in — do not overwrite existing values with null.
+    // Use raw SQL to avoid enumerating billing columns that may not exist yet.
+    const existingResult = await db.execute(sql`
+      SELECT id, email, first_name, last_name, profile_image_url
+      FROM users WHERE id = ${appleId}
+    `);
+    const existingRow = existingResult.rows[0] as {
+      id: string; email: string | null; first_name: string | null;
+      last_name: string | null; profile_image_url: string | null;
+    } | undefined;
+    const existing = existingRow
+      ? { email: existingRow.email, firstName: existingRow.first_name, lastName: existingRow.last_name }
+      : null;
     const dbUser = await upsertUser({
       sub: appleId,
       email: claims.email ?? existing?.email ?? null,
