@@ -738,3 +738,24 @@ export const GetStreakResponse = zod.object({
   longestStreak: zod.number(),
   lastCookedAt: zod.date().nullish(),
 });
+
+/**
+ * @summary Get current plan and trial status
+ */
+export const GetBillingStatusResponse = zod.object({
+  plan: zod.enum(["free", "lifetime"]),
+  trialActive: zod.boolean(),
+  trialHoursLeft: zod.number(),
+  upgradeRequired: zod.boolean(),
+});
+
+/**
+ * @summary Create a Stripe Checkout session
+ */
+export const CreateBillingCheckoutBody = zod.object({
+  type: zod.enum(["full", "split_first"]),
+});
+
+export const CreateBillingCheckoutResponse = zod.object({
+  url: zod.string(),
+});
