@@ -48,25 +48,41 @@ const TRIAL_HOURS = 48;
  * Returns true if access is denied (response already sent).
  */
 async function checkTrialAccess(userId: string, res: Response): Promise<boolean> {
-  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
-  if (!user) {
-    res.status(404).json({ error: "User not found" });
+  // Use raw SQL to only touch billing columns — Drizzle v0.45 would enumerate
+  // ALL usersTable columns and fail if billing columns aren't in the DB yet.
+  try {
+    const result = await db.execute(
+      sql`SELECT plan, trial_started_at FROM users WHERE id = ${userId} LIMIT 1`,
+    );
+    const row = result.rows[0] as
+      | { plan: string | null; trial_started_at: string | null }
+      | undefined;
+
+    if (!row) {
+      res.status(404).json({ error: "User not found" });
+      return true;
+    }
+
+    if (row.plan === "lifetime") return false; // access granted
+
+    if (!row.trial_started_at) {
+      // First time generating — start the trial clock
+      await db.execute(
+        sql`UPDATE users SET trial_started_at = NOW() WHERE id = ${userId}`,
+      );
+      return false;
+    }
+
+    const hoursElapsed =
+      (Date.now() - new Date(row.trial_started_at).getTime()) / 3_600_000;
+    if (hoursElapsed < TRIAL_HOURS) return false;
+
+    res.status(402).json({ error: "TRIAL_EXPIRED", upgradeRequired: true });
     return true;
+  } catch {
+    // Billing columns not yet in DB (push-force pending) — allow access.
+    return false;
   }
-
-  if (user.plan === "lifetime") return false; // access granted
-
-  if (!user.trialStartedAt) {
-    // First time the user generates recipes — start the trial clock
-    await db.update(usersTable).set({ trialStartedAt: new Date() }).where(eq(usersTable.id, userId));
-    return false; // access granted
-  }
-
-  const hoursElapsed = (Date.now() - user.trialStartedAt.getTime()) / 3_600_000;
-  if (hoursElapsed < TRIAL_HOURS) return false; // still within trial
-
-  res.status(402).json({ error: "TRIAL_EXPIRED", upgradeRequired: true });
-  return true; // access denied
 }
 
 function toGoalSlug(goal: string): string {

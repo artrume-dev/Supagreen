@@ -1,7 +1,7 @@
 import Stripe from "stripe";
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db, usersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -38,13 +38,18 @@ router.get("/billing/status", async (req: Request, res: Response) => {
     return;
   }
 
-  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+  const statusResult = await db.execute(
+    sql`SELECT plan, trial_started_at FROM users WHERE id = ${userId} LIMIT 1`,
+  );
+  const user = statusResult.rows[0] as
+    | { plan: string | null; trial_started_at: string | null }
+    | undefined;
   if (!user) {
     res.status(404).json({ error: "User not found" });
     return;
   }
 
-  const plan = user.plan as "free" | "lifetime";
+  const plan = (user.plan ?? "free") as "free" | "lifetime";
 
   if (plan === "lifetime") {
     res.json({
@@ -61,12 +66,12 @@ router.get("/billing/status", async (req: Request, res: Response) => {
   let trialHoursLeft = 0;
   const TRIAL_HOURS = 48;
 
-  if (!user.trialStartedAt) {
+  if (!user.trial_started_at) {
     // Trial hasn't started yet (user hasn't generated any recipes)
     trialActive = true;
     trialHoursLeft = TRIAL_HOURS;
   } else {
-    const hoursElapsed = (Date.now() - user.trialStartedAt.getTime()) / 3_600_000;
+    const hoursElapsed = (Date.now() - new Date(user.trial_started_at).getTime()) / 3_600_000;
     trialActive = hoursElapsed < TRIAL_HOURS;
     trialHoursLeft = Math.max(0, TRIAL_HOURS - hoursElapsed);
   }
@@ -100,7 +105,12 @@ router.post("/billing/checkout", async (req: Request, res: Response) => {
   const origin = getPublicOrigin();
 
   // Ensure the user has a Stripe customer
-  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+  const checkoutResult = await db.execute(
+    sql`SELECT plan, stripe_customer_id, email, first_name, last_name FROM users WHERE id = ${userId} LIMIT 1`,
+  );
+  const user = checkoutResult.rows[0] as
+    | { plan: string | null; stripe_customer_id: string | null; email: string | null; first_name: string | null; last_name: string | null }
+    | undefined;
   if (!user) {
     res.status(404).json({ error: "User not found" });
     return;
@@ -112,11 +122,11 @@ router.post("/billing/checkout", async (req: Request, res: Response) => {
     return;
   }
 
-  let stripeCustomerId = user.stripeCustomerId;
+  let stripeCustomerId = user.stripe_customer_id;
   if (!stripeCustomerId) {
     const customer = await stripe.customers.create({
       email: user.email ?? undefined,
-      name: [user.firstName, user.lastName].filter(Boolean).join(" ") || undefined,
+      name: [user.first_name, user.last_name].filter(Boolean).join(" ") || undefined,
       metadata: { userId },
     });
     stripeCustomerId = customer.id;
