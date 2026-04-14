@@ -10,4 +10,4 @@ cmds = [
 cmds = ["pnpm --filter @workspace/api-server build"]
 
 [start]
-cmd = "pnpm --filter @workspace/api-server start"
+cmd = "pnpm --filter @workspace/db push-force && pnpm --filter @workspace/api-server start"

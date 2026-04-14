@@ -307,9 +307,14 @@ router.get("/callback", async (req: Request, res: Response) => {
     return;
   }
 
-  const dbUser = await upsertUser(
-    claims as unknown as Record<string, unknown>,
-  );
+  let dbUser: Awaited<ReturnType<typeof upsertUser>>;
+  try {
+    dbUser = await upsertUser(claims as unknown as Record<string, unknown>);
+  } catch (err) {
+    console.error("[/api/callback] upsertUser failed:", err);
+    res.redirect(loginFallback);
+    return;
+  }
 
   const now = Math.floor(Date.now() / 1000);
   const sessionData: SessionData = {
@@ -325,7 +330,14 @@ router.get("/callback", async (req: Request, res: Response) => {
     expires_at: tokens.expiresIn() ? now + tokens.expiresIn()! : claims.exp,
   };
 
-  const sid = await createSession(sessionData);
+  let sid: string;
+  try {
+    sid = await createSession(sessionData);
+  } catch (err) {
+    console.error("[/api/callback] createSession failed:", err);
+    res.redirect(loginFallback);
+    return;
+  }
   setSessionCookie(req, res, sid);
 
   if (
@@ -420,7 +432,8 @@ router.post(
       const sid = await createSession(sessionData);
       res.json(ExchangeMobileAuthorizationCodeResponse.parse({ token: sid }));
     } catch (err) {
-      console.error("Mobile token exchange error:", err);
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("[/api/mobile-auth/token-exchange] failed:", message, err);
       res.status(500).json({ error: "Token exchange failed" });
     }
   },
