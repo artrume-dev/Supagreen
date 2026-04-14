@@ -14,6 +14,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
+import { Platform } from "react-native";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthContext, getSyncToken, useAuth, useAuthProvider } from "@/lib/auth";
@@ -181,6 +182,10 @@ function RootLayoutNav() {
         <Stack.Screen
           name="recipe/[id]"
           options={{ animation: "slide_from_bottom" }}
+        />
+        <Stack.Screen
+          name="upgrade"
+          options={{ animation: "slide_from_bottom", presentation: "modal" }}
         />
       </Stack>
     </AuthGate>

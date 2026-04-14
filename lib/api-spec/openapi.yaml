@@ -560,6 +560,58 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
 
+  /api/billing/status:
+    get:
+      operationId: getBillingStatus
+      summary: Get current plan and trial status
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Billing status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingStatus'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /api/billing/checkout:
+    post:
+      operationId: createBillingCheckout
+      summary: Create a Stripe Checkout session
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillingCheckoutBody'
+      responses:
+        '200':
+          description: Checkout URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingCheckoutResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
 components:
   parameters:
     AuthorizationSessionHeader:
@@ -578,6 +630,35 @@ components:
         type: string
 
   schemas:
+    BillingStatus:
+      type: object
+      required: [plan, trialActive, trialHoursLeft, upgradeRequired]
+      properties:
+        plan:
+          type: string
+          enum: [free, lifetime]
+        trialActive:
+          type: boolean
+        trialHoursLeft:
+          type: number
+        upgradeRequired:
+          type: boolean
+
+    BillingCheckoutBody:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [full, split_first]
+
+    BillingCheckoutResponse:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+
     HealthStatus:
       type: object
       properties:

@@ -5,6 +5,37 @@
  * NutriSnap API specification
  * OpenAPI spec version: 0.1.0
  */
+export type BillingStatusPlan =
+  (typeof BillingStatusPlan)[keyof typeof BillingStatusPlan];
+
+export const BillingStatusPlan = {
+  free: "free",
+  lifetime: "lifetime",
+} as const;
+
+export interface BillingStatus {
+  plan: BillingStatusPlan;
+  trialActive: boolean;
+  trialHoursLeft: number;
+  upgradeRequired: boolean;
+}
+
+export type BillingCheckoutBodyType =
+  (typeof BillingCheckoutBodyType)[keyof typeof BillingCheckoutBodyType];
+
+export const BillingCheckoutBodyType = {
+  full: "full",
+  split_first: "split_first",
+} as const;
+
+export interface BillingCheckoutBody {
+  type: BillingCheckoutBodyType;
+}
+
+export interface BillingCheckoutResponse {
+  url: string;
+}
+
 export interface HealthStatus {
   status: string;
 }

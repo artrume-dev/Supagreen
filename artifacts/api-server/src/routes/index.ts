@@ -6,6 +6,7 @@ import profileRouter from "./profile";
 import recipesRouter from "./recipes";
 import shoppingRouter from "./shopping";
 import streaksRouter from "./streaks";
+import billingRouter from "./billing";
 
 const router: IRouter = Router();
 
@@ -17,5 +18,6 @@ router.use(profileRouter);
 router.use(recipesRouter);
 router.use(shoppingRouter);
 router.use(streaksRouter);
+router.use(billingRouter);
 
 export default router;

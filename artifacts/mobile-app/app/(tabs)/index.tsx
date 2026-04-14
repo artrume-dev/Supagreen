@@ -25,6 +25,7 @@ import { getTodayDateString } from "@/features/common/date";
 import { getTodayRecipesByGoal, regenerateDailyMenu } from "@/features/home/api";
 import { getRecipeDetailCacheKey, type CachedRecipeDetail } from "@/features/home/recipeDetailCache";
 import {
+  getGetBillingStatusQueryOptions,
   getGetProfileQueryOptions,
   getGetTodayRecipesQueryOptions,
   getGetStreakQueryOptions,
@@ -419,6 +420,16 @@ export default function HomeScreen() {
     enabled: canFetch,
   });
 
+  const { data: billingData } = useQuery({
+    ...getGetBillingStatusQueryOptions(),
+    enabled: canFetch,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const upgradeRequired = billingData?.upgradeRequired ?? false;
+  const trialHoursLeft = billingData?.trialHoursLeft ?? 48;
+  const showTrialBadge = billingData?.plan === "free" && billingData.trialActive && trialHoursLeft < 24;
+
   const { mutateAsync: regenerate } = useRegenerateRecipe();
 
   const handleRegenerate = useCallback(async (mealType: string) => {
@@ -489,13 +500,22 @@ export default function HomeScreen() {
               {getGreeting()}, {firstName}{"\u{1F44B}"}
             </Text>
           </View>
-          {streak > 0 && (
-            <View style={styles.streakBadge}>
-              <Ionicons name="flame" size={22} color={Colors.accent} />
-              <Text style={styles.streakValue}>{streak}</Text>
-              <Text style={styles.streakLabel}>streak</Text>
-            </View>
-          )}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            {showTrialBadge && (
+              <Pressable onPress={() => router.push("/upgrade")} style={styles.trialBadge}>
+                <Text style={styles.trialBadgeText}>
+                  Trial: {Math.ceil(trialHoursLeft)}h left
+                </Text>
+              </Pressable>
+            )}
+            {streak > 0 && (
+              <View style={styles.streakBadge}>
+                <Ionicons name="flame" size={22} color={Colors.accent} />
+                <Text style={styles.streakValue}>{streak}</Text>
+                <Text style={styles.streakLabel}>streak</Text>
+              </View>
+            )}
+          </View>
         </View>
 
         <LinearGradient
@@ -626,6 +646,28 @@ export default function HomeScreen() {
               );
             })}
           </>
+        )}
+
+        {/* Paywall banner — shown when trial has expired */}
+        {upgradeRequired && (
+          <Pressable onPress={() => router.push("/upgrade")} style={styles.paywallBanner}>
+            <LinearGradient
+              colors={["rgba(34,197,94,0.18)", "rgba(34,197,94,0.08)"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.paywallBannerInner}
+            >
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={styles.paywallTitle}>Your free trial has ended</Text>
+                <Text style={styles.paywallSub}>
+                  Unlock Recipe Genie for £20 — pay once, yours forever
+                </Text>
+              </View>
+              <View style={styles.paywallCta}>
+                <Text style={styles.paywallCtaText}>Upgrade →</Text>
+              </View>
+            </LinearGradient>
+          </Pressable>
         )}
 
       </ScrollView>
@@ -1099,6 +1141,58 @@ const styles = StyleSheet.create({
   },
   emptyButtonText: {
     fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: "#fff",
+  },
+  // Trial badge in header (shown when < 24h left)
+  trialBadge: {
+    backgroundColor: "rgba(251,191,36,0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(251,191,36,0.35)",
+    borderRadius: 100,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  trialBadgeText: {
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+    color: "#FBBF24",
+  },
+  // Paywall banner at bottom of scroll
+  paywallBanner: {
+    marginHorizontal: 16,
+    marginTop: 20,
+    marginBottom: 8,
+    borderRadius: 16,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(34,197,94,0.35)",
+  },
+  paywallBannerInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    gap: 12,
+  },
+  paywallTitle: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.text,
+  },
+  paywallSub: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textSecondary,
+    lineHeight: 17,
+  },
+  paywallCta: {
+    backgroundColor: Colors.primary,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  paywallCtaText: {
+    fontSize: 13,
     fontFamily: "Inter_600SemiBold",
     color: "#fff",
   },

@@ -20,6 +20,7 @@ import Colors from "@/constants/colors";
 import { useAuth } from "@/lib/auth";
 import { getMealHistory } from "@/features/profile/history";
 import {
+  getGetBillingStatusQueryOptions,
   getGetProfileQueryOptions,
   getGetStreakQueryOptions,
   getGetSavedRecipesQueryOptions,
@@ -162,6 +163,12 @@ export default function ProfileScreen() {
     enabled: !authLoading && !!user,
   });
 
+  const { data: billingData } = useQuery({
+    ...getGetBillingStatusQueryOptions(),
+    enabled: !authLoading && !!user,
+    staleTime: 5 * 60 * 1000,
+  });
+
   const profileData = profileResponse?.profile;
   const streak = streakData?.currentStreak || 0;
   const longestStreak = streakData?.longestStreak || 0;
@@ -277,6 +284,43 @@ export default function ProfileScreen() {
             </View>
           </LinearGradient>
         </View>
+
+        {/* Plan status card */}
+        {billingData && (
+          <View style={styles.planCard}>
+            {billingData.plan === "lifetime" ? (
+              <View style={styles.planCardInner}>
+                <View style={[styles.planPill, styles.planPillPro]}>
+                  <Feather name="check-circle" size={12} color={Colors.primary} />
+                  <Text style={[styles.planPillText, { color: Colors.primary }]}>Pro · Lifetime</Text>
+                </View>
+                <Text style={styles.planCardDesc}>Full access, forever. Thank you!</Text>
+              </View>
+            ) : billingData.trialActive ? (
+              <View style={styles.planCardInner}>
+                <View style={[styles.planPill, styles.planPillTrial]}>
+                  <Feather name="clock" size={12} color={Colors.primary} />
+                  <Text style={[styles.planPillText, { color: Colors.primary }]}>
+                    Trial · {Math.ceil(billingData.trialHoursLeft)}h left
+                  </Text>
+                </View>
+                <Pressable onPress={() => router.push("/upgrade")} style={styles.planUpgradeBtn}>
+                  <Text style={styles.planUpgradeBtnText}>Upgrade to Pro →</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <View style={styles.planCardInner}>
+                <View style={[styles.planPill, styles.planPillExpired]}>
+                  <Feather name="alert-circle" size={12} color="#FBBF24" />
+                  <Text style={[styles.planPillText, { color: "#FBBF24" }]}>Trial ended</Text>
+                </View>
+                <Pressable onPress={() => router.push("/upgrade")} style={[styles.planUpgradeBtn, styles.planUpgradeBtnUrgent]}>
+                  <Text style={styles.planUpgradeBtnText}>Unlock for £20 →</Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
+        )}
 
         <View style={styles.milestonesSection}>
           <Text style={styles.sectionTitle}>Milestones</Text>
@@ -1299,5 +1343,71 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "Inter_600SemiBold",
     color: Colors.error,
+  },
+  // Plan status card
+  planCard: {
+    marginHorizontal: 20,
+    marginBottom: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(34,197,94,0.20)",
+    backgroundColor: Colors.card,
+    overflow: "hidden",
+  },
+  planCardInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 10,
+  },
+  planCardDesc: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textSecondary,
+    textAlign: "right",
+  },
+  planPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderRadius: 100,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  planPillPro: {
+    backgroundColor: "rgba(34,197,94,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(34,197,94,0.28)",
+  },
+  planPillTrial: {
+    backgroundColor: "rgba(34,197,94,0.10)",
+    borderWidth: 1,
+    borderColor: "rgba(34,197,94,0.25)",
+  },
+  planPillExpired: {
+    backgroundColor: "rgba(251,191,36,0.10)",
+    borderWidth: 1,
+    borderColor: "rgba(251,191,36,0.28)",
+  },
+  planPillText: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+  },
+  planUpgradeBtn: {
+    backgroundColor: Colors.primary,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  planUpgradeBtnUrgent: {
+    backgroundColor: "#FBBF24",
+  },
+  planUpgradeBtnText: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+    color: "#fff",
   },
 });

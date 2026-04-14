@@ -3,6 +3,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import { authMiddleware } from "./middlewares/authMiddleware";
 import router from "./routes";
+import { webhookHandler } from "./routes/billing";
 
 const app: Express = express();
 
@@ -12,6 +13,10 @@ app.set("etag", false);
 
 app.use(cors({ credentials: true, origin: true }));
 app.use(cookieParser());
+
+// Stripe webhook needs the raw body before express.json() parses it
+app.post("/api/billing/webhook", express.raw({ type: "application/json" }), webhookHandler);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(authMiddleware);

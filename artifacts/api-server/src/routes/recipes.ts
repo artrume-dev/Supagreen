@@ -15,6 +15,7 @@ import {
   savedRecipesTable,
   userProfilesTable,
   shoppingListsTable,
+  usersTable,
 } from "@workspace/db";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { coerceDateFields } from "../lib/parseDate";
@@ -36,6 +37,37 @@ function parseGoalList(raw: string | null): string[] {
 
 const CANONICAL_MEALS = ["breakfast", "lunch", "dinner", "treat"] as const;
 type CanonicalMeal = (typeof CANONICAL_MEALS)[number];
+
+const TRIAL_HOURS = 48;
+
+/**
+ * Checks whether a user is allowed to generate/regenerate recipes.
+ * - Lifetime users: always allowed.
+ * - Free users: allowed within the 48-hour trial window that starts on first use.
+ * - Sets trialStartedAt lazily on first call for free users.
+ * Returns true if access is denied (response already sent).
+ */
+async function checkTrialAccess(userId: string, res: Response): Promise<boolean> {
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+  if (!user) {
+    res.status(404).json({ error: "User not found" });
+    return true;
+  }
+
+  if (user.plan === "lifetime") return false; // access granted
+
+  if (!user.trialStartedAt) {
+    // First time the user generates recipes — start the trial clock
+    await db.update(usersTable).set({ trialStartedAt: new Date() }).where(eq(usersTable.id, userId));
+    return false; // access granted
+  }
+
+  const hoursElapsed = (Date.now() - user.trialStartedAt.getTime()) / 3_600_000;
+  if (hoursElapsed < TRIAL_HOURS) return false; // still within trial
+
+  res.status(402).json({ error: "TRIAL_EXPIRED", upgradeRequired: true });
+  return true; // access denied
+}
 
 function toGoalSlug(goal: string): string {
   return goal
@@ -424,6 +456,8 @@ router.get("/recipes/today", async (req: Request, res: Response) => {
   }
 
   const userId = req.user!.id;
+
+  if (await checkTrialAccess(userId, res)) return;
 
   let recipes = await db
     .select()
@@ -841,6 +875,8 @@ router.post("/recipes/regenerate-menu", async (req: Request, res: Response) => {
 
   const userId = req.user!.id;
 
+  if (await checkTrialAccess(userId, res)) return;
+
   try {
     await regenerateDailyMenuForDate(userId, date);
   } catch (err) {
@@ -888,6 +924,8 @@ router.post("/recipes/regenerate", async (req: Request, res: Response) => {
     ? parsed.data.date.toISOString().split("T")[0]
     : todayDate();
   const userId = req.user!.id;
+
+  if (await checkTrialAccess(userId, res)) return;
 
   const totalRegenCount = await db
     .select({ total: sql<number>`coalesce(sum(regen_count), 0)::int` })
